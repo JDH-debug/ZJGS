@@ -439,6 +439,7 @@ body.role-super .super-only.blk{display:block !important}
           <button class="btn sm primary" id="btnStdAdd">＋ 新增标准工时</button>
           <input type="file" id="fileImportStd" accept=".xlsx,.xls,.csv" style="max-width:230px">
           <button class="btn sm" id="btnStdImport">导入总表</button>
+          <button class="btn sm super-only" id="btnStdSite">🏭 按BOM刷新生产地</button>
           <button class="btn sm super-only" id="btnStdSiteOpt">⚙ 生产地选项</button>
           <button class="btn sm super-only" id="btnStdMatch">↻ 一键匹配到物料主数据</button>
           <button class="btn sm super-only" id="btnStdRate" title="按入库系数重算入库工时（半成品/成品 1.2，完成品 1.4，单独设过系数的按各自值）">🔁 按系数重算入库工时</button>
@@ -868,6 +869,7 @@ body.role-super .super-only.blk{display:block !important}
 <div class="toast" id="toast"></div>
 
 <script>STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
