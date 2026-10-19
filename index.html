@@ -903,6 +903,7 @@ STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
 /* ============ 基础工具 ============ */
 var SEED=JSON.parse(document.getElementById('seedData').textContent);
 var DB_KEY='zjwork_db_v1';
@@ -1382,6 +1383,7 @@ function doBomQuery(){
 }
 function renderBom(){
   var code=BOMQ.code;if(!code)return;
+  var fe=$('b-filter');if(fe&&AC_DIRTY.test((fe.value||'').trim()))fe.value='';
   var mx=parseInt($('b-level').value)||0,om=$('b-onlyMade').checked,fw=$('b-filter').value.trim().toLowerCase();
   var rows=bomRows(code,mx,om);
   var all=rows;
@@ -2674,7 +2676,9 @@ on('btnStdClear',function(){
   for(var c in DB.times){var t=DB.times[c];t.matched=false;t.stdTotal=null;t.inboundTotal=null;}
   save();rebuildStdIndex();fillStdSelects();renderStd();refreshStat();renderList();
   BRD.dirty=true;toast('已清空总表');});
-on('btnStdSearch',function(){STDV.page=1;renderStd();});
+on('btnStdSearch',function(){
+  var e=$('s-kw');if(e&&AC_DIRTY.test((e.value||'').trim()))e.value='';
+  STDV.page=1;renderStd();});
 on('btnStdReset',function(){$('s-kw').value='';$('s-type').value='';$('s-shop').value='';$('s-line').value='';$('s-series').value='';$('s-match').value='';STDV.page=1;renderStd();});
 onkd('s-kw',function(e){if(e.key==='Enter')$('btnStdSearch').onclick();});
 on('btnStdMatch',function(){if(!isAdmin())return toast('请先登录管理员');autoMatch(false);});
@@ -3613,8 +3617,11 @@ function brdFillSelects(){
 function brdFilter(){
   var hs=$('brd-host')?$('brd-host').value:'',s=$('brd-series')?$('brd-series').value:'',h=hs,
       kw=(($('brd-kw')?$('brd-kw').value:'')||'').trim().toLowerCase(),
+      kwEl=$('brd-kw'),
       ob=$('brd-onlyBom')?$('brd-onlyBom').checked:false;
   var kwCode=(($('brd-code')?$('brd-code').value:'')||'').trim();
+  /* 读取时净化：若关键字是自动填充的账号类脏值，等同空值并清框 */
+  if(kwEl&&AC_DIRTY.test(kw)){kwEl.value='';kw='';}
   BRD.hidden=0;
   BRD.filt=BRD.data.filter(function(x){
     /* 默认只展示：总表标注为「完成品」且已匹配 BOM 明细的料号；
@@ -3946,6 +3953,8 @@ function bindBoard(){
     toast(BRD.scope==='zj'?'已切换：仅统计湛江生产地':'已切换：统计全部生产地');});
   on('btnBrdReset',function(){
     $('brd-host').value='';$('brd-series').value='';$('brd-kw').value='';
+    /* 重置时清掉"用户手动输入"标记，让防填充重新生效 */
+    ['brd-kw','brd-code'].forEach(function(id){var el=$(id);if(el)el._userTyped=false;});
     $('brd-onlyBom').checked=false;BRD.mode='all';BRD.code='';$('brd-code').value='';
     brdRefresh();toast('已重置');});
   on('btnBrdExp2',function(){
@@ -5271,13 +5280,45 @@ onch('setEnc',function(){
   save();renderSetInfo();audit('加密',DB.settings.enc?'已开启（密文）':'已关闭（明文）');
   toast(DB.settings.enc?'已切换到密文传输，下次上传生效':'已切换到明文传输，下次上传生效');});
 /* 启动时清理：浏览器自动填充可能往筛选框塞用户名等脏值 */
+/* ---- 防浏览器自动填充（Chrome/Edge 会往任意文本框塞记住的用户名）----
+   三重防护：
+   ① 动态改成随机 autocomplete / name，让浏览器认不出这是账号类字段
+   ② 多次延迟清理（浏览器填充可能发生在加载后数秒）
+   ③ 聚焦 / 输入时再查一次
+   只清"用户没手动输入过"的框，不会误删你自己输的关键字 */
+var AC_DIRTY=/^(admin|administrator|user|用户名|email|电子邮箱)$/i;
+var AC_RND='x'+(Date.now()%100000).toString(36)+Math.random().toString(36).slice(2,6);
+function acHardenInputs(){
+  document.querySelectorAll('input[type="text"],input[type="password"],input[type="number"],input[type="search"]')
+  .forEach(function(el){
+    if(el.getAttribute('data-ac')==AC_RND)return;
+    el.setAttribute('data-ac',AC_RND);
+    /* 随机值：浏览器只对已知的 autocomplete 词（username/current-password 等）填充 */
+    if(el.type!=='password')el.setAttribute('autocomplete','off-'+AC_RND);
+    else el.setAttribute('autocomplete','new-password');
+    /* 随机 name：避免浏览器按字段历史匹配 */
+    if(!el.getAttribute('name')||el.getAttribute('name').indexOf('ac_')!==0)
+      el.setAttribute('name','ac_'+AC_RND+'_'+el.id);
+  });
+}
 function clearAutofill(){
-  ['brd-kw','brd-code','b-filter','r-filter','s-kw','pickKw','sa-code','sa-name','sa-shop']
+  acHardenInputs();
+  ['brd-kw','brd-code','b-filter','r-filter','s-kw','pickKw','sa-code','sa-name','sa-shop','t-code','b-code','r-code']
   .forEach(function(id){
     var el=$(id);if(!el)return;
-    var v=el.value||'';
-    /* 只清掉明显是自动填充的值（用户名/邮箱），用户手动输入的关键字通常不会是这些 */
-    if(/^(admin|administrator|user|用户名)$/i.test(v.trim()))el.value='';});
+    if(el._userTyped)return;            /* 用户自己输过，绝不覆盖 */
+    var v=(el.value||'').trim();
+    if(AC_DIRTY.test(v)){el.value='';el.classList.add('ac-cleaned');}
+  });
+}
+function acWatch(){
+  /* 用户手动输入后立刻打标记 */
+  ['brd-kw','brd-code','b-filter','r-filter','s-kw','pickKw','sa-code','sa-name','sa-shop','t-code','b-code','r-code']
+  .forEach(function(id){
+    var el=$(id);if(!el||el._acBound)return;el._acBound=1;
+    ['input','keydown','paste','focus'].forEach(function(ev){
+      el.addEventListener(ev,function(){el._userTyped=true;},true);});
+  });
 }
 /* 无操作自动退出 */
 var LOCK_T=null;
@@ -5545,7 +5586,13 @@ function renderCurrentPage(){
 syncStd();
 fillStdSelects();syncStdMatchSel();injectDataMaint();
 clBind();clKpi();clInit();
-clearAutofill();
+clearAutofill();acWatch();
+[300,1000,2500,5000].forEach(function(ms){setTimeout(clearAutofill,ms);});
+/* 持续巡检：浏览器可能在任意时刻填充（如点击输入框时） */
+setInterval(function(){
+  if(document.hidden)return;
+  clearAutofill();acWatch();
+},1500);
 if($('seg-code')){
   var sc=segCodes();
   $('seg-code').innerHTML=sc.map(function(c){
