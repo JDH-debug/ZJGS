@@ -441,6 +441,7 @@ body.role-super .super-only.blk{display:block !important}
           <button class="btn sm" id="btnStdImport">导入总表</button>
           <button class="btn sm super-only" id="btnStdSiteOpt">⚙ 生产地选项</button>
           <button class="btn sm super-only" id="btnStdMatch">↻ 一键匹配到物料主数据</button>
+          <button class="btn sm super-only" id="btnStdRate" title="按入库系数重算入库工时（半成品/成品 1.2，完成品 1.4，单独设过系数的按各自值）">🔁 按系数重算入库工时</button>
           <button class="btn sm super-only" id="btnStdTpl">下载模板</button>
           <button class="btn sm super-only" id="btnStdExportC">导出CSV</button>
           <button class="btn sm super-only" id="btnStdExportX">导出Excel</button>
@@ -904,6 +905,10 @@ STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
 /* ============ 基础工具 ============ */
 var SEED=JSON.parse(document.getElementById('seedData').textContent);
 var DB_KEY='zjwork_db_v1';
@@ -1069,7 +1074,9 @@ function stdTime(code){
 function inboundTime(code){
   var t=DB.times[code];
   if(t&&t.inbound!==null&&t.inbound!==undefined&&t.inbound!=='')return Number(t.inbound);
-  return Math.round(stdTime(code)*Number(DB.settings.rate)*100)/100;
+  var r=stdRec(code);
+  if(r&&r[4]!==null&&r[4]!==undefined&&r[4]!==''&&!isNaN(Number(r[4])))return Number(r[4]);
+  return Math.round(stdTime(code)*rateOf(code)*100)/100;
 }
 function inboundAuto(code){
   var t=DB.times[code];
@@ -1614,12 +1621,16 @@ function renderTime(){
       '<input type="number" min="0" step="0.01" id="stdInput" class="w-sm" value="'+(sv===null?'':sv)+'" '+(isAdmin()?'':'disabled')+'>'+
       '<span class="unit">'+UNIT+'</span></div>'+
       '<div class="s mt8">'+(sv===null?'<span style="color:#dc2626">未填写，请完善</span>':'车间：'+esc(rec[2]||'-'))+'</div></div>';
-    var autoIv=(iv===null&&sv!==null)?Math.round(sv*DB.settings.rate*100)/100:iv;
-    h+='<div class="kpi orange"><div class="t">入库工时'+(iv===null?'（自动 × '+DB.settings.rate+'）':'')+'</div>'+
+    var cdRate=rateOf(code);
+    var autoIv=(iv===null&&sv!==null)?Math.round(sv*cdRate*100)/100:iv;
+    h+='<div class="kpi orange"><div class="t">入库工时'+
+      (iv===null?'（自动 × '+cdRate+'）':'（系数 × '+cdRate+'）')+'</div>'+
       '<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'+
       '<input type="number" min="0" step="0.01" id="ibInput" class="w-sm" value="'+(iv===null?'':iv)+'" '+(isAdmin()?'':'disabled')+'>'+
       '<span class="unit">'+UNIT+'</span></div>'+
-      '<div class="s mt8">'+(iv===null?('<span style="color:#d97706">总表未填，自动值 '+fmt(autoIv)+'</span>'+(isAdmin()?' ｜ <span class="link" id="ibFill">按系数填入</span>':'')):'总表值')+'</div></div>';
+      '<div class="s mt8">系数 ×'+cdRate+'（'+esc(typev||'未分类')+'默认 '+rateDefault(code)+'）'+
+      (iv===null?(' ｜ <span style="color:#d97706">总表未填，自动值 '+fmt(autoIv)+'</span>'+
+        (isAdmin()?' ｜ <span class="link" id="ibFill">按系数填入</span>':'')):' ｜ 总表值')+'</div></div>';
     h+='<div class="kpi blue"><div class="t">总表附加信息</div>'+
       '<div class="s mt8" style="line-height:1.8">车间：'+esc(rec[2]||'-')+' ｜ 流水线：'+esc(rec[7]||'-')+'<br>'+
       '隶属主机：'+esc(rec[8]||'-')+' ｜ 系列：'+esc(rec[9]||'-')+'<br>备注：'+esc(rec[6]||'-')+'</div></div>';
@@ -1628,11 +1639,16 @@ function renderTime(){
   if($('goStdAdd'))on('goStdAdd',function(){go('p-std');openStdEdit(null);
     $('se-code').value=code;$('se-name').value=it.name||'';toast('请在组装标准工时总表中补充该料号工时');});
   if($('ibFill'))on('ibFill',function(){
-    var i2=STD_IDX[code];STD[i2][4]=Math.round(stageUnit(code)*DB.settings.rate*100)/100;
-    getTime(code).inboundTotal=STD[i2][4];save();renderTime();toast('已按系数填入入库工时');});
+    var i2=STD_IDX[code];STD[i2][4]=Math.round(stageUnit(code)*rateOf(code)*100)/100;
+    getTime(code).inboundTotal=STD[i2][4];save();BRD.dirty=true;renderTime();
+    toast('已按系数 '+rateOf(code)+' 填入入库工时');});
   var si=$('stdInput'),ii=$('ibInput');
   if(si)si.onchange=function(){
     var i2=STD_IDX[code];STD[i2][3]=(si.value===''?null:Number(si.value));
+    if(!(DB.rates&&DB.rates[code]!==undefined&&DB.rates[code]!=='')){
+      var nv=recalcInbound(code);
+      if(nv!==null)getTime(code).inboundTotal=nv;
+    }
     getTime(code).stdTotal=STD[i2][3];save();BRD.dirty=true;renderTime();toast('标准工时已保存');};
   if(ii)ii.onchange=function(){
     var i2=STD_IDX[code];STD[i2][4]=(ii.value===''?null:Number(ii.value));
@@ -1647,7 +1663,7 @@ on('btnTimePick',function(){openPick(function(c){$('t-code').value=c;doTimeQuery
 function costRows(code,includeSelf,scope){
   /* scope: 'all' 全部（默认） ｜ 'zj' 仅湛江生产地 */
   var onlyZj=(scope==='zj');
-  var acc={semi:0,fin:0,done:0},rows=[];
+  var acc={semi:0,fin:0,done:0,in:0},rows=[];
   (function walk(c,cum,seen,lv){
     (DB.bom[c]||[]).forEach(function(k){
       var it=DB.items[k.code];if(!it)return;
@@ -1663,9 +1679,10 @@ function costRows(code,includeSelf,scope){
         if(grp){
           var zj=isZhanjiang(k.code);
           var sub=u*q;
-          if(!onlyZj||zj){acc[grp]+=sub;
+          var uin=stdInbound(k.code),subin=Math.round(uin*q*100)/100;
+          if(!onlyZj||zj){acc[grp]+=sub;acc.in+=subin;
             rows.push({lv:lv,code:k.code,name:it.name,prop:it.prop,stage:it.stage,
-              qty:q,unit:u,sub:sub,site:(zj?'湛江':'赣州')});
+              qty:q,unit:u,sub:sub,inb:uin,subin:subin,site:(zj?'湛江':'赣州')});
           }
         }
       }
@@ -1679,8 +1696,10 @@ function costRows(code,includeSelf,scope){
       if(tp==='完成品'||tp==='成品'||tp==='半成品'){u=stageUnit(code);
         grp=(tp==='完成品'?'done':(tp==='成品'?'fin':'semi'));}
       var zjSelf=isZhanjiang(code);
-      if(grp&&(!onlyZj||zjSelf)){acc[grp]+=u;
-        rows.unshift({lv:0,code:code,name:s.name,prop:s.prop,stage:s.stage,qty:1,unit:u,sub:u,site:(zjSelf?'湛江':'赣州')});}
+      var uinSelf=stdInbound(code);
+      if(grp&&(!onlyZj||zjSelf)){acc[grp]+=u;acc.in+=uinSelf;
+        rows.unshift({lv:0,code:code,name:s.name,prop:s.prop,stage:s.stage,qty:1,unit:u,sub:u,
+          inb:uinSelf,subin:uinSelf,site:(zjSelf?'湛江':'赣州')});}
     }
   }
   return {acc:acc,rows:rows};
@@ -2313,7 +2332,18 @@ function normSeries(v){
 function rebuildStdIndex(){STD_IDX={};for(var i=0;i<STD.length;i++){if(STD_IDX[STD[i][0]]===undefined)STD_IDX[STD[i][0]]=i;}}
 function stdRec(code){var i=STD_IDX[code];return i===undefined?null:STD[i];}
 function stdStd(code){var r=stdRec(code);return r?r[3]:null;}
-function stdInbound(code){var r=stdRec(code);return r?r[4]:null;}
+/* 入库工时：优先取总表「入库工时」列；为空则按 标准工时 × 该料号系数 自动计算 */
+function stdInbound(code){
+  var r=stdRec(code);
+  if(r){
+    var v=r[4];
+    if(v!==null&&v!==undefined&&v!==''&&!isNaN(Number(v)))return Number(v);
+  }
+  var t=DB.times[code];
+  if(t&&t.inbound!==null&&t.inbound!==undefined&&t.inbound!=='')return Number(t.inbound);
+  var sv=stageUnit(code);
+  return sv?Math.round(sv*rateOf(code)*100)/100:0;
+}
 function syncStd(){
   if(Array.isArray(DB.std))STD=DB.std;else DB.std=STD;
   rebuildStdIndex();
@@ -2343,10 +2373,27 @@ function stdTypeOf(code){
   return it?it.stage:'';
 }
 /* 单个料号的入库系数：优先该料号自定义值，其次全局设置，默认 1.4 */
+/* 入库系数：料号自定义 > 按总表类型的默认值（半成品/成品 1.2，完成品 1.4）> 1.4 */
+var RATE_DEF={'半成品':1.2,'成品':1.2,'完成品':1.4};
+function rateDefault(code){
+  var t=stdTypeOf(code);
+  if(RATE_DEF[t]!==undefined)return RATE_DEF[t];
+  return 1.4;
+}
 function rateOf(code){
   var r=(DB.rates&&DB.rates[code]);
   if(r!==undefined&&r!==null&&r!==''&&!isNaN(Number(r)))return Number(r);
-  return Number(DB.settings.rate)||1.4;
+  return rateDefault(code);
+}
+/* 按系数重算入库工时（写入总表第 4 列） */
+function recalcInbound(code){
+  var i2=STD_IDX[code];if(i2===undefined)return null;
+  var std=Number(STD[i2][3]);
+  if(std===null||isNaN(std))return null;
+  var v=Math.round(std*rateOf(code)*100)/100;
+  STD[i2][4]=v;
+  var t=getTime(code);if(t)t.inboundTotal=v;
+  return v;
 }
 function setRate(code,v){
   if(!DB.rates)DB.rates={};
@@ -2453,6 +2500,36 @@ function stdFilter(){
   }
   return out;
 }
+/* 入库工时显示值：总表有值直接用；为空则按 标准工时 × 系数 自动算（不落库，仅显示） */
+function ibAuto(i){
+  var r=STD[i];
+  if(!r)return null;
+  var v=r[4];
+  if(v!==null&&v!==undefined&&v!==''&&!isNaN(Number(v)))return Number(v);
+  var sv=Number(r[3]);
+  if(sv===null||isNaN(sv)||!sv)return null;
+  return Math.round(sv*rateOf(r[0])*100)/100;
+}
+function ibIsAuto(i){
+  var r=STD[i];if(!r)return false;
+  var v=r[4];
+  return (v===null||v===undefined||v===''||isNaN(Number(v)));
+}
+/* 编辑态输入框的值：空则填自动计算值，让用户直接看到结果 */
+function ibVal(i){
+  var v=STD[i]&&STD[i][4];
+  if(v!==null&&v!==undefined&&v!==''&&!isNaN(Number(v)))return v;
+  var a=ibAuto(i);
+  return a===null?'':a;
+}
+/* 只读态单元格：自动算出来的用橙色数字（不显示"自动"字样，悬停可看来源） */
+function ibCell(i,code){
+  var a=ibAuto(i);
+  if(a===null)return '-';
+  if(ibIsAuto(i))return '<span style="color:#b45309" title="总表未填写，按系数 '+rateOf(code)+
+    ' 自动计算">'+fmt(a)+'</span>';
+  return fmt(a);
+}
 function renderStd(){
   syncStd();
   STDV.rows=stdFilter();
@@ -2460,22 +2537,30 @@ function renderStd(){
   var rows=STDV.rows.slice((STDV.page-1)*STDV.size,STDV.page*STDV.size);
   var h='<table><thead><tr><th style="width:46px">序号</th><th style="width:126px">物料编码</th><th style="width:180px">物料名称</th>'+
     '<th style="width:104px">生产车间</th><th style="width:64px">生产地</th>'+
-    '<th class="num" style="width:88px">标准工时</th><th class="num" style="width:88px">入库工时</th>'+
+    '<th class="num" style="width:88px">标准工时</th>'+
+    (isAdmin()?'<th class="num" style="width:74px" title="入库系数：半成品/成品默认 1.2，完成品默认 1.4'+
+      (isSuper()?'；超管可单独修改，改后自动重算入库工时':'；仅超管可修改')+'">入库系数</th>':'')+
+    '<th class="num" style="width:88px">入库工时</th>'+
     '<th style="width:78px">类型</th><th style="width:100px">备注</th><th style="width:74px">流水线</th>'+
     '<th style="width:78px">隶属主机</th><th style="width:84px">产品系列</th><th style="width:66px">匹配</th>'+
     '<th style="width:96px">操作</th></tr></thead><tbody>';
-  if(!rows.length)h+='<tr><td colspan="14" class="empty">无数据</td></tr>';
+  if(!rows.length)h+='<tr><td colspan="'+(isAdmin()?15:14)+'" class="empty">无数据</td></tr>';
   rows.forEach(function(i){
     var r=STD[i],code=r[0],has=!!DB.items[code],matched=isMatched(code);
     h+='<tr><td>'+(i+1)+'</td><td class="mono">'+esc(code)+'</td><td>'+esc(r[1]||'')+'</td>'+
       '<td>'+esc(r[2]||'')+'</td><td>'+siteCell(code)+'</td>';
     if(isAdmin()){
       h+='<td class="num"><input type="number" min="0" step="0.01" class="w-sm num" data-si="'+i+'" data-sf="3" value="'+(r[3]===null?'':r[3])+'"></td>'+
-         '<td class="num"><input type="number" min="0" step="0.01" class="w-sm num" data-si="'+i+'" data-sf="4" value="'+(r[4]===null?'':r[4])+'"></td>'+
+         (isAdmin()?(isSuper()
+           ?'<td class="num"><input type="number" min="0" step="0.01" class="w-sm num rate-in" data-si="'+i+'" data-sf="10" value="'+rateOf(code)+'" title="默认 '+rateDefault(code)+'（按类型），修改后自动重算入库工时"></td>'
+           :'<td class="num hint" title="默认 '+rateDefault(code)+'（按类型），仅超管可修改">'+rateOf(code)+'</td>'):'')+
+         '<td class="num"><input type="number" min="0" step="0.01" class="w-sm num" data-si="'+i+'" data-sf="4" value="'+ibVal(i)+'"></td>'+
          '<td><select data-si="'+i+'" data-sf="5" class="w-sm">'+STD_TYPES.map(function(t){
             return '<option'+(r[5]===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></td>';
     }else{
-      h+='<td class="num">'+(r[3]===null?'-':fmt(r[3]))+'</td><td class="num">'+(r[4]===null?'-':fmt(r[4]))+'</td>'+
+      h+='<td class="num">'+(r[3]===null?'-':fmt(r[3]))+'</td>'+
+        (isAdmin()?'<td class="num hint">'+rateOf(code)+'</td>':'')+
+        '<td class="num">'+ibCell(i,code)+'</td>'+
          '<td><span class="tag '+esc(r[5]||'')+'">'+esc(r[5]||'未分类')+'</span></td>';
     }
     h+='<td class="hint">'+esc((r[6]||'').slice(0,20))+'</td><td>'+esc(r[7]||'')+'</td><td>'+esc(r[8]||'')+'</td><td>'+esc(r[9]||'')+'</td>'+
@@ -2489,7 +2574,25 @@ function renderStd(){
   $('stdWrap').querySelectorAll('[data-si]').forEach(function(el){
     el.onchange=function(){
       var i=parseInt(el.getAttribute('data-si')),f=parseInt(el.getAttribute('data-sf'));
-      if(f===3||f===4)STD[i][f]=(el.value===''?null:Number(el.value));
+      /* f=10 为入库系数：改后自动重算入库工时 */
+      if(f===10){
+        if(!isSuper()){el.value=rateOf(STD[i][0]);return toast('仅超管可修改入库系数');}
+        var cd=STD[i][0],v=el.value.trim();
+        if(v===''){setRate(cd,'');audit('入库系数','恢复默认：'+cd+' ×'+rateDefault(cd));}
+        else{var n=Number(v);
+          if(isNaN(n)||n<0||n>100){el.value=rateOf(cd);return toast('请输入 0-100 之间的数值');}
+          setRate(cd,n);audit('入库系数',cd+' → ×'+n);}
+        var nv=recalcInbound(cd);
+        save();renderStd();renderStdStat();BRD.dirty=true;
+        toast(nv===null?'系数已保存（该料号无标准工时，入库工时未变）'
+          :'系数已保存，入库工时自动重算为 '+nv);
+        return;
+      }
+      /* 改标准工时：若系数为默认值（未单独设过），同步自动重算入库工时 */
+      if(f===3){
+        STD[i][3]=(el.value===''?null:Number(el.value));
+        if(!(DB.rates&&DB.rates[STD[i][0]]!==undefined&&DB.rates[STD[i][0]]!==''))recalcInbound(STD[i][0]);
+      }else if(f===4)STD[i][4]=(el.value===''?null:Number(el.value));
       else STD[i][f]=el.value;
       var code=STD[i][0];
       if(DB.items[code]){
@@ -2517,7 +2620,16 @@ function renderStdStat(){
   STD.forEach(function(r){if(r[3]!==null){has++;ssum+=Number(r[3]);}if(isMatched(r[0]))mt++;});
   var miss=0;STD.forEach(function(r){if(!DB.items[r[0]])miss++;});
   var nz=0,ng=0;STD.forEach(function(r){if(isZhanjiang(r[0]))nz++;else ng++;});
-  $('stdStat').innerHTML='总表共 <b>'+STD.length+'</b> 条 ｜ 有标准工时 <b>'+has+'</b> 条（合计 '+fmt(ssum)+' 秒） ｜ '+
+  /* 入库工时合计：含自动计算值；统计未填写（自动算）的条数 */
+  var isum=0,iauto=0;
+  for(var si=0;si<STD.length;si++){
+    var a=ibAuto(si);
+    if(a!==null&&!isNaN(a))isum+=a;
+    if(ibIsAuto(si))iauto++;
+  }
+  $('stdStat').innerHTML='总表共 <b>'+STD.length+'</b> 条 ｜ 有标准工时 <b>'+has+'</b> 条（合计 '+fmt(ssum)+' 秒）'+
+    ' ｜ 入库工时合计 <b style="color:#b45309">'+fmt(Math.round(isum*100)/100)+'</b> 秒'+
+    (iauto?'（含 <b>'+iauto+'</b> 条按系数补算）':'')+' ｜ '+
     '<b style="color:#0f9960">已匹配 '+mt+'</b> ｜ <b style="color:#d97706">未匹配 '+(STD.length-mt)+'</b>（其中主数据缺料号 '+miss+' 条）'+
     ' ｜ 生产地：<b style="color:#15803d">湛江 '+nz+'</b> / <b>赣州 '+ng+'</b>'+
     (isAdmin()?'':' ｜ <span class="hint">浏览模式仅显示已匹配记录</span>')+
@@ -2626,12 +2738,15 @@ on('btnStdImport',function(){
   if(isCSV)fr.readAsText(f,'utf-8');else fr.readAsArrayBuffer(f);
 });
 function buildStdRows(codes){
-  var rows=[['序号','物料编码','物料名称','生产车间','标准工时','入库工时','类型','备注','产品流水线','隶属主机','产品系列','匹配状态']];
+  var rows=[['序号','物料编码','物料名称','生产车间','生产地','标准工时','入库系数','入库工时','入库来源','类型','备注','产品流水线','隶属主机','产品系列','匹配状态']];
   var idx=codes||null;
   for(var i=0;i<STD.length;i++){
     if(idx&&idx.indexOf(i)<0)continue;
     var r=STD[i];
-    rows.push([i+1,r[0],r[1]||'',r[2]||'',r[3]===null?'':r[3],r[4]===null?'':r[4],r[5]||'',r[6]||'',r[7]||'',r[8]||'',r[9]||'',
+    var ib=ibAuto(i);
+    rows.push([i+1,r[0],r[1]||'',r[2]||'',stdSite(r[0]),r[3]===null?'':r[3],rateOf(r[0]),
+      ib===null?'':ib, ibIsAuto(i)?'按系数自动计算':'总表填写',
+      r[5]||'',r[6]||'',r[7]||'',r[8]||'',r[9]||'',
       isMatched(r[0])?'已匹配':(DB.items[r[0]]?'未匹配':'无此料号')]);
   }
   return rows;
@@ -2676,6 +2791,32 @@ on('btnStdClear',function(){
   for(var c in DB.times){var t=DB.times[c];t.matched=false;t.stdTotal=null;t.inboundTotal=null;}
   save();rebuildStdIndex();fillStdSelects();renderStd();refreshStat();renderList();
   BRD.dirty=true;toast('已清空总表');});
+on('btnStdRate',function(){
+  if(!isSuper())return toast('仅超管可操作');
+  var empty=0;
+  STD.forEach(function(r){
+    var v=r[4];
+    if(v===null||v===undefined||v===''||isNaN(Number(v)))empty++;});
+  var all=confirm('按入库系数重算入库工时\n\n'+
+    '默认值：半成品 / 成品 ×1.2，完成品 ×1.4\n'+
+    '单独设过系数的料号按各自系数计算\n\n'+
+    '当前有 '+empty+' 条入库工时为空（共 '+STD.length+' 条）。\n\n'+
+    '【确定】= 只重算这 '+empty+' 条空的（保留已填写的）\n'+
+    '【取消】= 全部 '+STD.length+' 条都按系数重算（会覆盖已填写的值）');
+  var n=0;
+  STD.forEach(function(r){
+    var v=r[4],blank=(v===null||v===undefined||v===''||isNaN(Number(v)));
+    if(all&&!blank)return;
+    var sv=Number(r[3]);
+    if(sv===null||isNaN(sv))return;
+    r[4]=Math.round(sv*rateOf(r[0])*100)/100;
+    var t=DB.times[r[0]];
+    if(t)t.inboundTotal=r[4];
+    n++;});
+  save();rebuildStdIndex();renderStd();renderStdStat();BRD.dirty=true;
+  audit('入库工时','按系数重算 '+n+' 条'+(all?'（仅空值）':'（全部）'));
+  toast('已重算 '+n+' 条入库工时');
+});
 on('btnStdSearch',function(){
   var e=$('s-kw');if(e&&AC_DIRTY.test((e.value||'').trim()))e.value='';
   STDV.page=1;renderStd();});
@@ -3593,6 +3734,8 @@ function brdBuild(){
       fin:r.acc.fin+(selfGrp==='成品'?selfPart:0),
       done:r.acc.done+(selfGrp==='完成品'?selfPart:0),
       total:total,sub:sub,
+      /* 入库工时：从总表调取汇总，逻辑与完整组装工时一致（本体 + Σ下级×累计用量） */
+      inbound:Math.round((r.acc.in+(selfOn?stdInbound(c):0))*100)/100,
       isDoneType:(stdTypeOf(c)==='完成品'),
       hasBom:r.rows.length>0,rows:r.rows});
   });
@@ -3653,7 +3796,8 @@ function brdRenderAll(){
   var list=listAll.slice(st,st+BRD.size);
   BRD.shown=list;
   var tot=0,sem=0,fin=0,done=0,noBom=0,hosts={};
-  listAll.forEach(function(x){tot+=x.total;sem+=x.semi;fin+=x.fin;done+=x.done;
+  var totInAll=0;
+  listAll.forEach(function(x){tot+=x.total;sem+=x.semi;fin+=x.fin;done+=x.done;totInAll+=x.inbound;
     if(x.host)hosts[x.host]=1;if(!x.hasBom)noBom++;});
   $('brdKpi').innerHTML=
     '<div class="kpi green"><div class="t">完成品种数</div><div class="v">'+listAll.length+'</div>'+
@@ -3661,41 +3805,36 @@ function brdRenderAll(){
     '<div class="kpi orange"><div class="t">机种数</div><div class="v">'+Object.keys(hosts).length+'</div>'+
       '<div class="s">取自总表「隶属主机」</div></div>';
   var sj=BRD.scope==='zj';
-  var canRate=isSuper();
-  var colN=canRate?12:11;
+  var colN=11;
   var h='<table class="brd"><colgroup>'+
     '<col style="width:44px"><col style="width:132px"><col>'+
     '<col style="width:80px"><col style="width:64px"><col style="width:92px">'+
     '<col style="width:92px"><col style="width:92px">'+
-    '<col style="width:104px">'+(canRate?'<col style="width:62px">':'')+
     '<col style="width:104px">'+
+    '<col style="width:110px">'+
     '<col style="width:86px"></colgroup><thead><tr>'+
     '<th>序号</th><th>编码</th><th>名称</th><th>机种</th><th>生产地</th>'+
     '<th class="num">半成品工时</th><th class="num">成品工时</th><th class="num">完成品工时</th>'+
     '<th class="num">'+(sj?'湛江组装工时':'完整组装工时')+'</th>'+
-    (canRate?'<th class="num" title="入库系数，超管可单独修改，默认 '+rate+'">系数</th>':'')+
-    '<th class="num">入库工时</th>'+
+    '<th class="num" title="从组装标准工时总表调取汇总：本体入库工时 + Σ（下级自制件入库工时 × 累计用量）">入库工时（总表汇总）</th>'+
     '<th>操作</th></tr></thead><tbody>';
   if(!list.length)h+='<tr><td colspan="'+colN+'" class="empty">没有符合条件的完成品（默认只显示总表标注完成品且已匹配BOM的料号，其它料号请输料号搜索）</td></tr>';
   var totIn=0;
   list.forEach(function(x,i){
-    var r1=rateOf(x.code);
-    totIn+=x.total*r1;
+    totIn+=x.inbound;
     h+='<tr><td>'+(st+i+1)+'</td><td class="mono">'+esc(x.code)+'</td><td>'+esc(x.name)+'</td>'+
       '<td>'+esc(x.host||'—')+'</td><td>'+siteCell(x.code)+'</td>'+
       '<td class="num">'+fmt(x.semi)+'</td><td class="num">'+fmt(x.fin)+'</td>'+
       '<td class="num">'+fmt(x.done)+'</td>'+
       '<td class="num"><b>'+fmt(x.total)+'</b></td>'+
-      (canRate?'<td class="num"><input class="rate-in" data-rate="'+esc(x.code)+'" '+
-        'value="'+r1+'" title="单独设置该料号入库系数"></td>':'')+
-      '<td class="num">'+fmt(x.total*r1)+'</td>'+
+      '<td class="num" style="color:#b45309">'+fmt(x.inbound)+'</td>'+
       '<td><button class="btn sm" data-brddet="'+esc(x.code)+'">明细</button>'+
       (x.hasBom?'':' <span class="tag" style="background:#f1f5f9;color:#94a3b8">缺BOM</span>')+
       '</td></tr>';});
   h+='<tr class="total"><td colspan="5">合计（'+listAll.length+' 个完成品各自工时之和，非去重）</td>'+
     '<td class="num">'+fmt(sem)+'</td><td class="num">'+fmt(fin)+'</td>'+
     '<td class="num">'+fmt(done)+'</td><td class="num">'+fmt(tot)+'</td>'+
-    (canRate?'<td></td>':'')+'<td class="num">'+fmt(totIn)+'</td><td></td></tr>';
+    '<td class="num">'+fmt(totInAll)+'</td><td></td></tr>';
   h+='</tbody></table>';
   $('brdWrap').innerHTML=h;
   $('brdCount').innerHTML='筛选 <b>'+listAll.length+'</b> 个完成品（总表标注完成品 <b>'+
@@ -3727,6 +3866,10 @@ function brdRenderOne(){
   var selfOn=(!onlyZj)||isZhanjiang(code);    /* 非湛江生产地不计入湛江口径 */
   var selfPart=selfOn?selfStd:0;
   var subTotal=r.acc.semi+r.acc.fin+r.acc.done; /* 下级自制件汇总（已按口径过滤） */
+  /* 入库工时：从总表调取汇总，与完整组装工时同口径（本体 + Σ下级×累计用量） */
+  var selfIn=(selfOn?stdInbound(code):0);
+  var subIn=r.acc.in;
+  var totalIn=Math.round((selfIn+subIn)*100)/100;
   /* 构造分层树：默认展开到第 2 级 */
   var tree=[];
   (function walk(c,cum,seen,lv,path){
@@ -3758,8 +3901,9 @@ function brdRenderOne(){
       '（本体 + 下级自制件）</div><div class="v">'+fmt(total)+'</div>'+
       '<div class="s">本体 '+fmt(selfPart)+(selfOn?'':'（非湛江，不计）')+
       ' + 下级 '+fmt(subTotal)+'</div></div>'+
-    '<div class="kpi blue"><div class="t">入库参考工时</div><div class="v">'+fmt(total*rate)+'</div>'+
-      '<div class="s">'+rateBoxOne(code,rate)+'</div></div>'+
+    '<div class="kpi blue"><div class="t">入库工时（总表汇总）</div><div class="v">'+fmt(totalIn)+'</div>'+
+      '<div class="s">本体 '+fmt(selfIn)+(selfOn?'':'（非湛江，不计）')+
+      ' + 下级 '+fmt(subIn)+' ｜ 系数在总表设置</div></div>'+
     '<div class="kpi purple"><div class="t">组件节点数（当前显示）</div><div class="v">'+tree.length+'</div>'+
       '<div class="s">直接下级 '+(DB.bom[code]||[]).length+
       ' 个（自制 '+(DB.bom[code]||[]).filter(function(k){
@@ -3916,15 +4060,13 @@ function buildBrdRows(){
       out.push(['L'+x.lv,x.code,x.name,x.prop,x.qty,x.unit,x.sub||'',x.site,x.sub||'',x.stage]);});
     out.push(['合计','','','','','','','','',selfStd+subTotal,'']);
     out.push([]);
-    out.push(['入库系数',rate,'入库工时',Math.round((selfStd+subTotal)*rate*100)/100]);
+    out.push(['入库工时（总表汇总）','','本体',selfIn,'下级合计',subIn,'合计',totalIn]);
     return out;
   }
   var rate=Number(DB.settings.rate)||1.4;
-  var out=[['编码','名称','机种','产品线','半成品工时','成品工时','完成品工时','组装成本工时','系数','入库工时']];
+  var out=[['编码','名称','机种','产品线','半成品工时','成品工时','完成品工时','组装成本工时','入库工时（总表汇总）']];
   BRD.filt.forEach(function(x){
-    var r1=rateOf(x.code);
-    out.push([x.code,x.name,x.host,x.series,x.semi,x.fin,x.done,x.total,r1,
-      Math.round(x.total*r1*100)/100]);});
+    out.push([x.code,x.name,x.host,x.series,x.semi,x.fin,x.done,x.total,x.inbound]);});
   return out;
 }
 
