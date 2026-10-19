@@ -362,7 +362,7 @@ body.role-super .super-only.blk{display:block !important}
         <div class="subpage active" id="b-fwd">
           <div class="toolbar">
             <div class="field"><label>料号</label>
-              <input type="text" id="b-code" class="w-md mono" placeholder="如 40.80.100.0001">
+              <input type="text" id="b-code" class="w-md mono" placeholder="如 40.80.100.0001" autocomplete="off">
             </div>
             <button class="btn" id="btnBomPick">选择料号</button>
             <button class="btn primary" id="btnBomQuery">🔍 查询</button>
@@ -372,7 +372,7 @@ body.role-super .super-only.blk{display:block !important}
             </div>
             <label class="field"><input type="checkbox" id="b-onlyMade" checked> 仅显示自制件</label>
             <div class="field"><label>过滤</label>
-              <input type="text" id="b-filter" class="w-md" placeholder="结果内过滤 编码/名称">
+              <input type="text" id="b-filter" class="w-md" placeholder="结果内过滤 编码/名称" autocomplete="off">
             </div>
             <button class="btn" id="btnBomExpAll">全部展开</button>
             <button class="btn" id="btnBomColAll">全部收起</button>
@@ -388,14 +388,14 @@ body.role-super .super-only.blk{display:block !important}
         <div class="subpage" id="b-rev">
           <div class="toolbar">
             <div class="field"><label>子件料号</label>
-              <input type="text" id="r-code" class="w-md mono" placeholder="如 30.80.100.0870">
+              <input type="text" id="r-code" class="w-md mono" placeholder="如 30.80.100.0870" autocomplete="off">
             </div>
             <button class="btn" id="btnRevPick">选择料号</button>
             <button class="btn primary" id="btnRevQuery">🔍 查询</button>
             <button class="btn" id="btnRevClear">清空</button>
             <label class="field"><input type="checkbox" id="r-onlyMade" checked> 仅显示自制件</label>
             <div class="field"><label>过滤</label>
-              <input type="text" id="r-filter" class="w-md" placeholder="结果内过滤 编码/名称">
+              <input type="text" id="r-filter" class="w-md" placeholder="结果内过滤 编码/名称" autocomplete="off">
             </div>
             <button class="btn" id="btnRevExpAll">全部展开</button>
             <button class="btn" id="btnRevColAll">全部收起</button>
@@ -420,7 +420,7 @@ body.role-super .super-only.blk{display:block !important}
       <div class="bd">
         <div class="toolbar">
           <div class="field"><label>关键字</label>
-            <input type="text" id="s-kw" class="w-lg" placeholder="编码 / 名称 / 备注 / 系列">
+            <input type="text" id="s-kw" class="w-lg" placeholder="编码 / 名称 / 备注 / 系列" autocomplete="off">
           </div>
           <div class="field"><label>类型</label>
             <select id="s-type"><option value="">全部</option><option>半成品</option><option>成品</option><option>完成品</option></select>
@@ -462,7 +462,7 @@ body.role-super .super-only.blk{display:block !important}
       <div class="bd">
         <div class="toolbar">
           <div class="field"><label>料号</label>
-            <input type="text" id="t-code" class="w-md mono" placeholder="如 30.80.100.0907">
+            <input type="text" id="t-code" class="w-md mono" placeholder="如 30.80.100.0907" autocomplete="off">
           </div>
           <button class="btn" id="btnTimePick">选择料号</button>
           <button class="btn primary" id="btnTimeQuery">查询工时</button>
@@ -493,7 +493,7 @@ body.role-super .super-only.blk{display:block !important}
       <div class="bd">
         <div class="toolbar">
           <div class="field"><label>完成品料号</label>
-            <input type="text" id="brd-code" class="w-lg mono" placeholder="留空=全部完成品汇总；输入料号=分层展开"></div>
+            <input type="text" id="brd-code" class="w-lg mono" placeholder="留空=全部完成品汇总；输入料号=分层展开" autocomplete="off"></div>
           <button class="btn" id="btnBrdPick">选择料号</button>
           <button class="btn primary" id="btnBrdQuery">🔍 查询</button>
           <button class="btn" id="btnBrdBack">返回全部汇总</button>
@@ -509,7 +509,7 @@ body.role-super .super-only.blk{display:block !important}
         <div class="toolbar">
           <label class="field">机种<select id="brd-host" class="w-md"><option value="">全部机种</option></select></label>
           <label class="field">产品线<select id="brd-series" class="w-md"><option value="">全部产品线</option></select></label>
-          <label class="field">关键字<input type="text" id="brd-kw" class="w-md" placeholder="料号 / 名称"></label>
+          <label class="field">关键字<input type="text" id="brd-kw" class="w-md" placeholder="料号 / 名称" autocomplete="off"></label>
           <button class="btn" id="btnBrdFilter">筛选</button>
           <button class="btn" id="btnBrdReset">重置</button>
           <span class="spacer" style="flex:1"></span>
@@ -537,18 +537,18 @@ body.role-super .super-only.blk{display:block !important}
     <div class="mh">新增 / 填报 组装标准工时<span class="spacer"></span><button class="btn sm" data-close>关闭</button></div>
     <div class="mb">
       <div class="frow"><label>物料编码</label><div class="ctl">
-        <input type="text" id="sa-code" class="w-lg mono" placeholder="如 30.60.100.0045"></div></div>
+        <input type="text" id="sa-code" class="w-lg mono" placeholder="如 30.60.100.0045" autocomplete="off"></div></div>
       <div class="frow"><label>物料名称</label><div class="ctl">
-        <input type="text" id="sa-name" class="w-lg"></div></div>
+        <input type="text" id="sa-name" class="w-lg" autocomplete="off"></div></div>
       <div class="frow"><label>类型</label><div class="ctl">
         <select id="sa-type" class="w-md"><option>半成品</option><option>成品</option><option>完成品</option></select></div></div>
       <div class="frow"><label>标准工时（秒）</label><div class="ctl">
-        <input type="number" id="sa-std" class="w-md" step="0.01" min="0"></div></div>
+        <input type="number" id="sa-std" class="w-md" step="0.01" min="0" autocomplete="off"></div></div>
       <div class="frow"><label>入库工时（秒）</label><div class="ctl">
-        <input type="number" id="sa-in" class="w-md" step="0.01" min="0">
+        <input type="number" id="sa-in" class="w-md" step="0.01" min="0" autocomplete="off">
         <span class="hint">留空则按 标准工时 × 1.4 自动计算</span></div></div>
       <div class="frow"><label>生产车间</label><div class="ctl">
-        <input type="text" id="sa-shop" class="w-md" placeholder="可留空"></div></div>
+        <input type="text" id="sa-shop" class="w-md" placeholder="可留空" autocomplete="off"></div></div>
       <div class="frow"><label></label><div class="ctl">
         <button class="btn primary" id="btnStdAddSave">保存</button>
         <button class="btn" id="btnStdAddCancel">取消</button>
@@ -583,7 +583,7 @@ body.role-super .super-only.blk{display:block !important}
       <div class="frow"><label>账号</label><div class="ctl">
         <input type="text" id="lg-user" class="w-md" placeholder="超管可留空" autocomplete="off"></div></div>
       <div class="frow"><label>密码</label><div class="ctl">
-        <input type="password" id="lg-pwd" class="w-md" placeholder="请输入密码"></div></div>
+        <input type="password" id="lg-pwd" class="w-md" placeholder="请输入密码" autocomplete="off"></div></div>
       <div class="frow"><label></label><div class="ctl">
         <button class="btn primary" id="btnLoginOk">登录</button>
         <button class="btn" id="btnLoginCancel">取消</button>
@@ -616,17 +616,17 @@ body.role-super .super-only.blk{display:block !important}
           <button class="btn sm danger" id="btnResetPwd">清除本机密码</button>
           <div class="hint mt8">超管密码<b>只保存在本机浏览器</b>，不上传云端。为安全起见不在页面显示；清除后下次登录可重新设置。管理员账号的密码请在「用户管理」中设置。</div>
         </div>
-        <div class="frow"><label>超管密码</label><div class="ctl"><input type="text" id="pw-direct" class="w-md mono">
+        <div class="frow"><label>超管密码</label><div class="ctl"><input type="text" id="pw-direct" class="w-md mono" autocomplete="off">
           <span class="hint">直接输入新密码并保存即可修改（无需原密码）</span></div></div>
-        <div class="frow"><label>原密码校验</label><div class="ctl"><input type="password" id="pw-old" placeholder="按原方式修改时填写"></div></div>
-        <div class="frow"><label>新密码</label><div class="ctl"><input type="password" id="pw-new"></div></div>
-        <div class="frow"><label>确认新密码</label><div class="ctl"><input type="password" id="pw-new2"></div></div>
+        <div class="frow"><label>原密码校验</label><div class="ctl"><input type="password" id="pw-old" placeholder="按原方式修改时填写" autocomplete="off"></div></div>
+        <div class="frow"><label>新密码</label><div class="ctl"><input type="password" id="pw-new" autocomplete="off"></div></div>
+        <div class="frow"><label>确认新密码</label><div class="ctl"><input type="password" id="pw-new2" autocomplete="off"></div></div>
         <div class="frow"><label></label><div class="ctl">
           <button class="btn primary" id="btnPwSave">修改超管密码</button>
           <button class="btn primary" id="btnPwDirect">保存新密码</button>
         </div></div>
         <div style="height:1px;background:var(--line2);margin:14px 0"></div>
-        <div class="frow"><label>入库工时系数</label><div class="ctl"><input type="number" id="setRate" step="0.1" style="max-width:120px">
+        <div class="frow"><label>入库工时系数</label><div class="ctl"><input type="number" id="setRate" step="0.1" style="max-width:120px" autocomplete="off">
           <span class="hint">入库工时 = 标准工时 × 系数</span></div></div>
         <div class="frow"><label></label><div class="ctl"><button class="btn primary" id="btnSaveSet">保存参数</button></div></div>
         <div style="height:1px;background:var(--line2);margin:14px 0"></div>
@@ -672,7 +672,7 @@ body.role-super .super-only.blk{display:block !important}
           <div class="frow"><label>超管账号</label><div class="ctl"><b>admin</b>
             <span class="hint">固定账号，不可改</span></div></div>
           <div class="frow"><label>新密码</label><div class="ctl">
-            <input type="text" id="pw-direct2" class="w-md mono" placeholder="直接输入新密码">
+            <input type="text" id="pw-direct2" class="w-md mono" placeholder="直接输入新密码" autocomplete="off">
             <button class="btn primary" id="btnPwDirect2">保存新密码</button></div></div>
           <div class="hint mt8">超管密码<b>只保存在本机浏览器</b>，不上传云端，页面不显示明文。忘记可清除后重新设置。</div>
           <div class="dbar mt8">
@@ -763,10 +763,10 @@ body.role-super .super-only.blk{display:block !important}
         <div class="note mb8">把数据存到 Supabase，多台电脑共享同一份数据。<b>本地仍保留一份副本</b>，断网时照常录入，联网后自动补传；看数据时以云端为准。</div>
 
         <div class="frow"><label>Project URL</label><div class="ctl">
-          <input type="text" id="cf-url" class="w-xl mono" placeholder="https://xxxxxxxx.supabase.co（可带 /rest/v1，会自动处理）">
+          <input type="text" id="cf-url" class="w-xl mono" placeholder="https://xxxxxxxx.supabase.co（可带 /rest/v1，会自动处理）" autocomplete="off">
         </div></div>
         <div class="frow"><label>anon key</label><div class="ctl">
-          <input type="password" id="cf-key" class="w-xl mono" placeholder="eyJhbGciOi...">
+          <input type="password" id="cf-key" class="w-xl mono" placeholder="eyJhbGciOi..." autocomplete="off">
           <button class="btn sm" id="cf-toggle">显示</button>
         </div></div>
         <div class="frow"><label></label><div class="ctl">
@@ -842,7 +842,7 @@ body.role-super .super-only.blk{display:block !important}
     <div class="mh">选择料号<span class="spacer"></span><button class="btn sm" data-close>关闭</button></div>
     <div class="mb">
       <div class="toolbar">
-        <input type="text" id="pickKw" class="w-lg" placeholder="编码 / 名称关键字">
+        <input type="text" id="pickKw" class="w-lg" placeholder="编码 / 名称关键字" autocomplete="off">
         <select id="pickStage"><option value="">全部阶段</option><option>半成品</option><option>成品</option><option>完成品</option></select>
         <button class="btn primary" id="btnPickSearch">搜索</button>
       </div>
@@ -867,6 +867,7 @@ body.role-super .super-only.blk{display:block !important}
 <div class="toast" id="toast"></div>
 
 <script>STD=JSON.parse(document.getElementById("seedStd").textContent);
+STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
 STD=JSON.parse(document.getElementById("seedStd").textContent);
@@ -1251,7 +1252,8 @@ function openItemEdit(c){
     DB.items[code]={code:code,name:$('e-name').value.trim(),spec:$('e-spec').value.trim(),
       prop:$('e-prop').value,unit:$('e-unit').value.trim()||'Pcs',stage:$('e-stage').value};
     if(DB.meta.tops.indexOf(code)<0&&$('e-stage').value==='完成品')DB.meta.tops.push(code);
-    save();refreshStat();renderList();fillCostSelect();closeMask('editMask');toast('已保存');});
+    save();refreshStat();renderList();fillCostSelect();BRD.dirty=true;
+    closeMask('editMask');toast('已保存');});
   $('editMask').classList.add('show');
 }
 on('btnSearch',function(){LIST.page=1;renderList()});
@@ -1629,9 +1631,10 @@ function renderTime(){
   var si=$('stdInput'),ii=$('ibInput');
   if(si)si.onchange=function(){
     var i2=STD_IDX[code];STD[i2][3]=(si.value===''?null:Number(si.value));
-    getTime(code).stdTotal=STD[i2][3];save();renderTime();toast('标准工时已保存');};
+    getTime(code).stdTotal=STD[i2][3];save();BRD.dirty=true;renderTime();toast('标准工时已保存');};
   if(ii)ii.onchange=function(){
     var i2=STD_IDX[code];STD[i2][4]=(ii.value===''?null:Number(ii.value));
+    BRD.dirty=true;
     getTime(code).inboundTotal=STD[i2][4];save();renderTime();toast('入库工时已保存');};
   if($('timeSum'))$('timeSum').innerHTML='';
 }
@@ -2491,7 +2494,7 @@ function renderStd(){
         var t=getTime(code);if(f===3)t.stdTotal=STD[i][3];if(f===4)t.inboundTotal=STD[i][4];
         if(f===5&&STAGES.indexOf(STD[i][5])>=0)DB.items[code].stage=STD[i][5];
       }
-      save();renderStdStat();toast('已保存');
+      save();renderStdStat();BRD.dirty=true;toast('已保存');
     };});
   $('stdWrap').querySelectorAll('[data-sedit]').forEach(function(b){
     b.onclick=function(){openStdEdit(parseInt(b.getAttribute('data-sedit')));};});
@@ -2565,6 +2568,7 @@ function openStdEdit(i){
     else{STD[i]=rec;}
     if(DB.items[code]&&STAGES.indexOf(rec[5])>=0)DB.items[code].stage=rec[5];
     DB.std=STD;save();rebuildStdIndex();fillStdSelects();renderStd();closeMask('editMask');
+    BRD.dirty=true;CUR_TIME=null;
     toast('已保存'+(DB.items[code]?'，物料工时阶段同步为 '+rec[5]:''));});
   $('editMask').classList.add('show');
 }
@@ -2668,7 +2672,8 @@ on('btnStdClear',function(){
   if(!confirm('确认清空组装标准工时总表全部 '+STD.length+' 条记录？已匹配到物料主数据的工时标记也会一并清除。'))return;
   STD=[];DB.std=[];
   for(var c in DB.times){var t=DB.times[c];t.matched=false;t.stdTotal=null;t.inboundTotal=null;}
-  save();rebuildStdIndex();fillStdSelects();renderStd();refreshStat();renderList();toast('已清空总表');});
+  save();rebuildStdIndex();fillStdSelects();renderStd();refreshStat();renderList();
+  BRD.dirty=true;toast('已清空总表');});
 on('btnStdSearch',function(){STDV.page=1;renderStd();});
 on('btnStdReset',function(){$('s-kw').value='';$('s-type').value='';$('s-shop').value='';$('s-line').value='';$('s-series').value='';$('s-match').value='';STDV.page=1;renderStd();});
 onkd('s-kw',function(e){if(e.key==='Enter')$('btnStdSearch').onclick();});
@@ -3543,11 +3548,21 @@ function brdMatched(code){var r=brdStd(code);return !!(r&&r[3]!==null&&r[3]!==un
 function brdHost(code){var r=brdStd(code);return (r&&r[8])||'';}
 function brdSeries(code){var r=brdStd(code);return (r&&r[9])||'';}
 function brdSig(){
-  var nb=0,nz=0;
+  /* 指纹必须覆盖「会影响工时结果」的所有维度，否则改了工时/生产地/系数却不重算＝脏读 */
+  var nb=0,nz=0,ssum=0,tsum=0;
   for(var k in DB.bom)nb+=(DB.bom[k]||[]).length;
-  STD.forEach(function(r){if((r[2]||'').indexOf('湛江')>=0)nz++;});
+  STD.forEach(function(r){
+    ssum+=(Number(r[3])||0);
+    if((r[2]||'').indexOf('湛江')>=0)nz++;});
+  /* 生产地覆盖：DB.sites 记录超管手工改过的料号 */
+  var siteN=0;for(var sc in (DB.sites||{}))siteN++;
+  /* 入库系数覆盖 */
+  var rateN=0,rateS=0;for(var rc in (DB.rates||{})){rateN++;rateS+=Number(DB.rates[rc])||0;}
+  /* 物料阶段也会影响归类 */
+  var stageS=0;for(var ic in DB.items){var st=(DB.items[ic].stage||'');stageS+=st.length;}
   return Object.keys(DB.items).length+'/'+nb+'/'+STD.length+'/'+costCodes().length+
-    '/'+(BRD.scope||'all')+'/'+nz;
+    '/'+(BRD.scope||'all')+'/'+nz+'/'+Math.round(ssum)+'/'+siteN+'/'+rateN+
+    '/'+Math.round(rateS*100)+'/'+stageS+'/'+Math.round(tsum);
 }
 /* 汇总数据：一行一个完成品 */
 function brdBuild(){
@@ -3883,22 +3898,26 @@ function brdRender(){
 function buildBrdRows(){
   if(BRD.mode==='one'){
     var rate=Number(DB.settings.rate)||1.4;
-    var out=[['层级','组件物料料号','组件物料名称','属性','用量','累计用量','标准工时','全加工总工时','阶段']];
+    var out=[['层级','组件物料料号','组件物料名称','属性','用量','累计用量','标准工时','生产地','全加工总工时','阶段']];
     var sd=brdStd(BRD.code),selfStd=(sd&&sd[3])||0;
     var r=costRows(BRD.code,false);
     var subTotal=r.acc.semi+r.acc.fin+r.acc.done;
     out.push(['本体',BRD.code,(DB.items[BRD.code]&&DB.items[BRD.code].name)||'',
-      (DB.items[BRD.code]&&DB.items[BRD.code].prop)||'',1,1,selfStd,selfStd+subTotal,
-      (DB.items[BRD.code]&&DB.items[BRD.code].stage)||'']);
+      (DB.items[BRD.code]&&DB.items[BRD.code].prop)||'',1,1,selfStd,stdSite(BRD.code),
+      selfStd+subTotal,(DB.items[BRD.code]&&DB.items[BRD.code].stage)||'']);
     r.rows.forEach(function(x){
-      out.push(['L'+x.lv,x.code,x.name,x.prop,x.qty,x.unit,x.sub||'',x.stage]);});
-    out.push(['合计','','','','','','',selfStd+subTotal,'']);
+      out.push(['L'+x.lv,x.code,x.name,x.prop,x.qty,x.unit,x.sub||'',x.site,x.sub||'',x.stage]);});
+    out.push(['合计','','','','','','','','',selfStd+subTotal,'']);
+    out.push([]);
+    out.push(['入库系数',rate,'入库工时',Math.round((selfStd+subTotal)*rate*100)/100]);
     return out;
   }
   var rate=Number(DB.settings.rate)||1.4;
-  var out=[['编码','名称','机种','产品线','半成品工时','成品工时','完成品工时','三项合计','入库工时×'+rate]];
+  var out=[['编码','名称','机种','产品线','半成品工时','成品工时','完成品工时','组装成本工时','系数','入库工时']];
   BRD.filt.forEach(function(x){
-    out.push([x.code,x.name,x.host,x.series,x.semi,x.fin,x.done,x.total,x.total*rate]);});
+    var r1=rateOf(x.code);
+    out.push([x.code,x.name,x.host,x.series,x.semi,x.fin,x.done,x.total,r1,
+      Math.round(x.total*r1*100)/100]);});
   return out;
 }
 
@@ -5251,6 +5270,15 @@ onch('setEnc',function(){
   if(DB.settings.enc&&!DB.settings.encPwd){DB.settings.enc=false;}
   save();renderSetInfo();audit('加密',DB.settings.enc?'已开启（密文）':'已关闭（明文）');
   toast(DB.settings.enc?'已切换到密文传输，下次上传生效':'已切换到明文传输，下次上传生效');});
+/* 启动时清理：浏览器自动填充可能往筛选框塞用户名等脏值 */
+function clearAutofill(){
+  ['brd-kw','brd-code','b-filter','r-filter','s-kw','pickKw','sa-code','sa-name','sa-shop']
+  .forEach(function(id){
+    var el=$(id);if(!el)return;
+    var v=el.value||'';
+    /* 只清掉明显是自动填充的值（用户名/邮箱），用户手动输入的关键字通常不会是这些 */
+    if(/^(admin|administrator|user|用户名)$/i.test(v.trim()))el.value='';});
+}
 /* 无操作自动退出 */
 var LOCK_T=null;
 function setupAutoLock(){
@@ -5517,6 +5545,7 @@ function renderCurrentPage(){
 syncStd();
 fillStdSelects();syncStdMatchSel();injectDataMaint();
 clBind();clKpi();clInit();
+clearAutofill();
 if($('seg-code')){
   var sc=segCodes();
   $('seg-code').innerHTML=sc.map(function(c){
