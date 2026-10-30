@@ -323,7 +323,7 @@ body.role-super .super-only.blk{display:block !important}
   <div class="spacer"></div>
   <div class="topbtns">
     <button class="btn tbtn admin-only" id="btnTopImport" title="导入物料 / BOM / 工时数据"><span class="ico"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><polyline points="7,9 12,4 17,9"/><line x1="5" y1="19" x2="19" y2="19"/></svg></span>导入</button>
-    <button class="btn tbtn super-only" id="btnBackup" title="导出 JSON 备份文件"><span class="ico"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>备份数据</button>
+    <button class="btn tbtn admin-only" id="btnBackup" title="导出 JSON 备份文件（管理员 + 超管可用）"><span class="ico"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>备份数据</button>
     <div class="acct-drop" id="acctDrop">
       <div class="badge acct view" id="btnPwd" title="登录 / 账号"><span class="ico"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></span><span id="pwdText">登录（浏览模式）</span></div>
     </div>
@@ -762,6 +762,11 @@ body.role-super .super-only.blk{display:block !important}
         <div class="cardblk">
           <div class="hd2">⑧ 清空</div>
           <div class="hint mb8">清空后不可恢复，请先「备份数据」。可选择保留组装标准工时总表，仅清空物料与 BOM。</div>
+          <div class="frow mb8"><label>备份</label><div class="ctl">
+            <button class="btn sm" data-dm2="backup2">💾 备份当前数据（导出 JSON）</button>
+            <button class="btn sm" data-dm2="restore2">📂 从备份恢复（导入 JSON）</button>
+            <span class="hint" style="margin-left:8px">恢复会覆盖当前全部数据，操作前会二次确认</span>
+          </div></div>
           <button class="btn sm danger" data-dm2="clear2">清空全部数据（含标准工时总表）</button>
           <button class="btn sm danger" data-dm2="clear1">清空物料与 BOM（保留标准工时总表）</button>
           <button class="btn sm" data-dm2="slim">🧹 清理冗余空壳物料（瘦身本地数据）</button>
@@ -842,7 +847,8 @@ body.role-super .super-only.blk{display:block !important}
           <button class="btn primary" id="btnDoImportAll">开始导入</button>
           <span class="spacer" style="flex:1"></span>
           <button class="btn" id="btnExportAllX">导出完整Excel</button>
-          <button class="btn" id="btnRestore">恢复备份JSON</button>
+          <button class="btn primary" id="btnBackup2">💾 备份JSON（导出文件）</button>
+          <button class="btn" id="btnRestore">📂 恢复备份JSON</button>
           <button class="btn" id="btnLoadSeed">载入出厂示例数据</button>
           <button class="btn danger" id="btnClearAll">清空全部数据</button>
         </div>
@@ -2379,19 +2385,35 @@ function dmSeed(){
   syncStdMatchSel();BRD.dirty=true;renderCurrentPage();toast('已载入示例数据');}
 function dmRestore(){
   if(!isAdmin())return toast('请先登录管理员');
-  var inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  var inp=document.createElement('input');inp.type='file';inp.accept='.json,.txt';
   inp.onchange=function(){
-    var f=inp.files[0];if(!f)return;var fr=new FileReader();
+    var f=inp.files[0];if(!f)return;
+    if(!confirm('确定用备份文件【'+f.name+'】恢复吗？\n\n'+
+      '· 会<b>覆盖当前全部数据</b>（物料 / BOM / 工时 / 总表 / 设置）\n'+
+      '· 当前未备份的改动将丢失\n\n建议先「💾 备份JSON」保存当前数据。\n\n确定恢复？'))return;
+    var fr=new FileReader();
     fr.onload=function(){
-      try{var d=JSON.parse(fr.result);
-        if(!d.items)throw new Error('文件格式不正确');
-        DB=d;if(!DB.procs)DB.procs=defaultDB().procs;
+      try{
+        var d=JSON.parse(fr.result);
+        if(!d.items)throw new Error('文件格式不正确（缺少 items 字段），请确认是本系统导出的备份');
+        var nItem=Object.keys(d.items||{}).length,nStd=(d.std&&d.std.length)||0;
+        if(!confirm('备份内容：物料 '+nItem+' 条'+(nStd?(' ｜ 总表 '+nStd+' 条'):'')+
+          '\n\n再次确认恢复？'))return;
+        DB=d;
+        if(!DB.procs)DB.procs=defaultDB().procs;
         if(!DB.settings)DB.settings={rate:1.4,pwd:''};
         if(!DB.meta)DB.meta={ver:1,tops:[]};
-        save();rebuildIndex();refreshStat();fillCostSelect();renderProcs();
-        syncStdMatchSel();renderCurrentPage();toast('已恢复数据');
+        save();rebuildIndex();
+        try{rebuildStdIndex();}catch(e){}
+        refreshStat();fillCostSelect();renderProcs();
+        try{syncStdMatchSel();}catch(e){}
+        renderCurrentPage();
+        if(typeof BRD!=='undefined')BRD.dirty=true;
+        audit('恢复备份',f.name+'（物料'+nItem+' 条）');
+        toast('已恢复：物料 '+nItem+' 条'+(nStd?(' ｜ 总表 '+nStd+' 条'):''));
       }catch(e){toast('恢复失败：'+e.message);}};
-    fr.readAsText(f);};
+    fr.onerror=function(){toast('文件读取失败，请重试');};
+    fr.readAsText(f,'utf-8');};
   inp.click();}
 on('btnClearTimes',function(){
   if(!isAdmin())return toast('请先登录管理员');
@@ -2572,6 +2594,7 @@ on('btnLoadSeed',dmSeed);
 /* ===== 50_backup.js ===== */
 /* ============ 备份恢复 / 密码 / 设置 ============ */
 on('btnBackup',dmBackup);
+on('btnBackup2',dmBackup);
 on('btnRestore',dmRestore);
 var DEF_PWD='';
 function showPwdInfo(){
@@ -3160,9 +3183,9 @@ var DM_HTML=''+
         '<option value="replace">整表替换</option></select>'+
       '<button class="btn sm primary" data-dm="import">开始导入</button>'+
       '<span class="spacer" style="flex:1"></span>'+
-      '<button class="btn sm super-only" data-dm="backup">备份JSON</button>'+
+      '<button class="btn sm" data-dm="backup">💾 备份JSON</button>'+
       '<button class="btn sm super-only" data-dm="exportX">导出完整Excel</button>'+
-      '<button class="btn sm super-only" data-dm="restore">恢复备份JSON</button>'+
+      '<button class="btn sm" data-dm="restore">📂 恢复备份JSON</button>'+
       '<button class="btn sm super-only" data-dm="seed">载入出厂示例数据</button>'+
       '<button class="btn sm danger super-only" data-dm="clear">清空全部数据</button>'+
     '</div>'+
@@ -5534,6 +5557,8 @@ document.querySelectorAll('[data-dm2]').forEach(function(b){
     var a=b.getAttribute('data-dm2');
     if(!isSuper())return toast('仅超管可操作');
     if(a==='backup')return dmBackup();
+    if(a==='backup2')return dmBackup();
+    if(a==='restore2')return dmRestore();
     if(a==='seed'){
       if(!confirm('载入出厂示例数据会覆盖当前全部数据，是否继续？'))return;
       DB=defaultDB();save();rebuildIndex();refreshStat();renderProcs();renderCurrentPage();
