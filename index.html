@@ -445,6 +445,7 @@ body.role-super .super-only.blk{display:block !important}
           <input type="file" id="fileImportStd" accept=".xlsx,.xls,.csv" style="max-width:230px">
           <button class="btn sm" id="btnStdImport">导入总表</button>
           <button class="btn sm super-only" id="btnStdSite">🏭 按BOM刷新生产地</button>
+          <button class="btn sm super-only" id="btnSiteDiag">🔍 生产地诊断</button>
           <button class="btn sm super-only" id="btnStdSiteOpt">⚙ 生产地选项</button>
           <button class="btn sm super-only" id="btnStdMatch">↻ 一键匹配到物料主数据</button>
           <button class="btn sm super-only" id="btnStdRate" title="按入库系数重算入库工时（半成品/成品 1.2，完成品 1.4，单独设过系数的按各自值）">🔁 按系数重算入库工时</button>
@@ -520,6 +521,7 @@ body.role-super .super-only.blk{display:block !important}
           <button class="btn" id="btnBrdFilter">筛选</button>
           <button class="btn" id="btnBrdReset">重置</button>
           <button class="btn" id="btnBrdWhy" title="检查某个料号为什么没出现在看板">🔍 为什么没显示</button>
+          <button class="btn" id="btnBrdAudit" title="扫描全部数据，统计有多少料号没进看板及原因">📋 看板诊断</button>
           <span class="spacer" style="flex:1"></span>
           <button class="btn" id="btnBrdExp2">展开到二级</button>
           <button class="btn" id="btnBrdExpAll">全部展开</button>
@@ -1817,8 +1819,17 @@ function costCodes(){
   var seen={},out=[];
   var push=function(c){if(!c||seen[c]||!DB.items[c])return;seen[c]=1;out.push(c);};
   ((DB.meta&&DB.meta.tops)||[]).forEach(push);
-  visibleCodes().forEach(function(c){if(isDoneCode(c))push(c);});
-  if(!out.length)return visibleCodes().filter(function(c){return DB.items[c]&&DB.items[c].stage==='完成品'});
+  /* 注意：不能用 visibleCodes()——它受「仅显示自制」过滤影响，
+     会把属性非「自制」的完成品（如成品 / 未标注）全部漏掉 */
+  Object.keys(DB.items||{}).forEach(function(c){if(isDoneCode(c))push(c);});
+  /* 兜底：总表里标注为完成品、但主数据里没有的料号也纳入 */
+  try{
+    (typeof STD!=='undefined'?STD:[]).forEach(function(r){
+      var c=r&&r[0];if(!c)return;
+      if(stdTypeOf(c)==='完成品')push(c);});
+  }catch(e){}
+  if(!out.length)return Object.keys(DB.items||{}).filter(function(c){
+    return DB.items[c]&&DB.items[c].stage==='完成品'});
   return out;
 }
 on('btnCostCalc',doCost);
@@ -2184,6 +2195,20 @@ function analyze(rows){
   }
   return out;
 }
+/* 按料号补建占位物料：优先取总表名称，属性缺省「自制」，阶段取总表类型 */
+function ensureItem(code){
+  if(!code)return false;
+  if(DB.items[code])return false;
+  var rc=(typeof stdRec==='function')?stdRec(code):null;
+  /* 总表列：0编码 1名称 2生产车间 3标准工时 4入库工时 5类型 */
+  DB.items[code]={code:code,
+    name:(rc&&rc[1])||'',
+    spec:'',
+    prop:'自制',
+    unit:'Pcs',
+    stage:(rc&&rc[5])||'半成品'};
+  return true;
+}
 function applyImport(data,mode,restrict){
   restrict=restrict||'all';
   var log=[];
@@ -2203,7 +2228,10 @@ function applyImport(data,mode,restrict){
       if(!x.p||!x.c)return;DB.bom[x.p]=DB.bom[x.p]||[];
       var e=DB.bom[x.p].filter(function(k){return k.code===x.c;})[0];
       if(e)e.qty=x.qty;else DB.bom[x.p].push({code:x.c,qty:x.qty});
-      nb++;});
+      nb++;
+      /* 关键：BOM明细（父件+子件）格式不产生物料行，这里补建占位物料。
+         否则父件不在 DB.items 中 → 看板 / BOM查询 / 成本汇总全都看不到它 */
+      ensureItem(x.p);ensureItem(x.c);});
     if(data.bomTree&&data.bomTree.length){
       var stack=[],added=0,root=null;
       data.bomTree.forEach(function(x){
@@ -3107,6 +3135,71 @@ on('btnStdSite',function(){
   syncStd();renderStd();renderStdStat();
   BRD.dirty=true;
   toast('生产地已刷新：湛江 '+r.totalZj+' 条 ｜ 赣州 '+r.totalGz+' 条');});
+/* 生产地诊断：统计 BOM 中的料号各是什么生产地、为什么 */
+on('btnSiteDiag',function(){
+  if(!isSuper())return toast('仅超管可操作');
+  var bomCodes={};
+  Object.keys(DB.bom||{}).forEach(function(p){
+    bomCodes[p]=1;(DB.bom[p]||[]).forEach(function(k){bomCodes[k.code]=1;});});
+  var list=Object.keys(bomCodes);
+  var zj=[],gzNotStd=[],gzOther=[];
+  list.forEach(function(c){
+    var s2=stdSite(c);
+    if(s2==='湛江')zj.push(c);
+    else if(STD_IDX[c]===undefined)gzNotStd.push(c);
+    else gzOther.push(c);});
+  var L=[];
+  L.push('<div style="font-size:13px;line-height:1.95">');
+  L.push('<div style="padding:8px 10px;background:#eff6ff;border-radius:6px;margin-bottom:10px">'+
+    'BOM 关系中出现的料号共 <b>'+list.length+'</b> 个　｜　当前判为<b style="color:#15803d">湛江 '+zj.length+
+    '</b> 个　｜　<b style="color:#dc2626">赣州 '+(gzNotStd.length+gzOther.length)+'</b> 个</div>');
+  L.push('<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<tr style="background:#f1f5f9"><th style="text-align:left;padding:6px;border:1px solid #e2e8f0">类别</th>'+
+    '<th style="padding:6px;border:1px solid #e2e8f0;width:64px">数量</th>'+
+    '<th style="text-align:left;padding:6px;border:1px solid #e2e8f0">说明 / 示例</th></tr>');
+  L.push('<tr><td style="padding:6px;border:1px solid #e2e8f0;color:#15803d;font-weight:600">湛江</td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center"><b>'+zj.length+'</b></td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b">在 BOM 中且总表有此料号</td></tr>');
+  L.push('<tr><td style="padding:6px;border:1px solid #e2e8f0;color:#dc2626;font-weight:600">赣州·总表无此料号</td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center"><b>'+gzNotStd.length+'</b></td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b">'+
+    (gzNotStd.length?gzNotStd.slice(0,4).map(esc).join('、')+(gzNotStd.length>4?' …':''):'—')+
+    '<br><span style="color:#d97706">在 BOM 里，但总表查不到，严格规则下判为赣州</span></td></tr>');
+  L.push('<tr><td style="padding:6px;border:1px solid #e2e8f0;color:#475569;font-weight:600">赣州·其他</td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center"><b>'+gzOther.length+'</b></td>'+
+    '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b">'+
+    (gzOther.length?gzOther.slice(0,3).map(esc).join('、'):'—')+'</td></tr>');
+  L.push('</table>');
+  L.push('<div style="margin-top:12px;padding:9px;background:#f8fafc;border-radius:6px;font-size:12.5px;line-height:2">'+
+    '<b>为什么会混着显示：</b>当前规则是<b>「在 BOM 中 ＋ 总表有此料号」→ 湛江</b>。'+
+    '只出现在 BOM、但总表里查不到的料号（多为完成品父件）会落到赣州。</div>');
+  var loose=!!(DB.settings&&DB.settings.siteLoose);
+  L.push('<div style="margin-top:10px;padding:8px;background:'+(loose?'#ecfdf5':'#fffbeb')+
+    ';border-radius:6px;font-size:12.5px">当前规则：<b>'+(loose?'宽松（BOM 中出现即湛江）':'严格（需总表有此料号）')+'</b></div>');
+  L.push('<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">'+
+    '<button class="btn sm primary" id="btnSiteLoose">切换为宽松规则（BOM 中出现即湛江）</button>'+
+    '<button class="btn sm" id="btnSiteStrict">切回严格规则（需总表有此料号）</button></div>');
+  L.push('<div class="hint mt8" style="font-size:11.5px">宽松规则会把 <b>'+list.length+
+    '</b> 个 BOM 料号全部设为湛江；如需精确区分，请把这些料号补进组装标准工时总表后改用严格规则。</div>');
+  L.push('</div>');
+  toastBox('生产地诊断',L.join(''),true);
+  var bl=$('btnSiteLoose');
+  if(bl)bl.onclick=function(){
+    if(!confirm('切换为【宽松规则】：凡是出现在 BOM 关系中的料号，生产地一律判为「湛江」，'+
+      '不再要求总表有此料号。\n\n将影响 '+list.length+' 个料号。确定？'))return;
+    DB.settings=DB.settings||{};DB.settings.siteLoose=true;
+    save();BRD.dirty=true;renderCurrentPage();
+    audit('生产地规则','宽松（BOM出现即湛江）');
+    toast('已切换为宽松规则，看板已刷新');
+    var m=$('_infoBox');if(m)m.style.display='none';};
+  var bs=$('btnSiteStrict');
+  if(bs)bs.onclick=function(){
+    DB.settings=DB.settings||{};DB.settings.siteLoose=false;
+    save();BRD.dirty=true;renderCurrentPage();
+    audit('生产地规则','严格（需总表有此料号）');
+    toast('已切换为严格规则，看板已刷新');
+    var m2=$('_infoBox');if(m2)m2.style.display='none';};
+});
 on('btnStdSiteOpt',function(){
   if(!isAdmin())return toast('请先登录管理员');
   var cur=siteOpts().join('、');
@@ -4427,7 +4520,123 @@ function bindBoard(){
     BRD.scope=$('brd-scope').value||'all';
     BRD.dirty=true;brdRefresh();
     toast(BRD.scope==='zj'?'已切换：仅统计湛江生产地':'已切换：统计全部生产地');});
-  /* 诊断：某个料号为什么没出现在看板默认列表 */
+  /* 看板全量诊断：扫描所有有 BOM 的父件 + 总表完成品，统计未显示的原因 */
+on('btnBrdAudit',function(){
+  if(!BRD.data||!BRD.data.length)brdBuild();
+  var shown={};BRD.data.forEach(function(x){if(x.isDoneType&&x.hasBom)shown[x.code]=1;});
+  var cand=costCodes();
+  var stat={'未标注完成品':[],'无BOM下级':[],'下级无自制件':[],'不在物料主数据':[]};
+  var okCount=0;
+  var scan=function(c){
+    if(shown[c]){okCount++;return;}
+    if(!DB.items[c]){stat['不在物料主数据'].push(c);return;}
+    var ty=stdTypeOf(c);
+    if(ty!=='完成品'){stat['未标注完成品'].push(c+'（'+(ty||'总表无')+'）');return;}
+    var kids=(DB.bom[c]||[]);
+    if(!kids.length){stat['无BOM下级'].push(c);return;}
+    var made=kids.filter(function(k){var x=DB.items[k.code];return x&&x.prop==='自制';});
+    if(!made.length){stat['下级无自制件'].push(c+'（'+kids.length+'个下级均非自制）');return;}
+    okCount++;
+  };
+  /* ① 所有作为父件出现的料号（导入 BOM 产生） */
+  var parents=Object.keys(DB.bom||{});
+  parents.forEach(scan);
+  /* ② 总表里标注完成品的料号 */
+  try{
+    STD.forEach(function(r){var c=r&&r[0];
+      if(c&&!shown[c]&&parents.indexOf(c)<0)scan(c);});
+  }catch(e){}
+  var L=[];
+  L.push('<div style="font-size:13px;line-height:1.95">');
+  L.push('<div style="padding:8px 10px;background:#eff6ff;border-radius:6px;margin-bottom:10px">'+
+    '<b>看板当前显示 '+okCount+' 个</b>　｜　本次扫描：候选完成品 '+cand.length+
+    ' 个　｜　有 BOM 关系的父件 '+parents.length+' 个</div>');
+  L.push('<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+    '<tr style="background:#f1f5f9"><th style="text-align:left;padding:6px;border:1px solid #e2e8f0">未显示原因</th>'+
+    '<th style="padding:6px;border:1px solid #e2e8f0;width:70px">数量</th>'+
+    '<th style="text-align:left;padding:6px;border:1px solid #e2e8f0">示例料号</th></tr>');
+  var colors={'未标注完成品':'#d97706','无BOM下级':'#dc2626','下级无自制件':'#dc2626','不在物料主数据':'#7c3aed'};
+  Object.keys(stat).forEach(function(k){
+    var a=stat[k];
+    L.push('<tr><td style="padding:6px;border:1px solid #e2e8f0;color:'+colors[k]+';font-weight:600">'+k+'</td>'+
+      '<td style="padding:6px;border:1px solid #e2e8f0;text-align:center"><b>'+a.length+'</b></td>'+
+      '<td style="padding:6px;border:1px solid #e2e8f0;color:#64748b">'+
+      (a.length?a.slice(0,4).map(esc).join('、')+(a.length>4?' …':'') :'—')+'</td></tr>');
+  });
+  L.push('</table>');
+  L.push('<div style="margin-top:12px;padding:9px;background:#f8fafc;border-radius:6px;font-size:12.5px;line-height:2">'+
+    '<b>怎么修：</b><br>');
+  if(stat['未标注完成品'].length)
+    L.push('· <b>未标注完成品</b>（'+stat['未标注完成品'].length+'）：去「组装标准工时总表」把这些料号的'+
+      '<b>类型改成「完成品」</b>并填标准工时<br>');
+  if(stat['无BOM下级'].length)
+    L.push('· <b>无BOM下级</b>（'+stat['无BOM下级'].length+'）：这些料号没有导入 BOM，或导入时父件列没识别到（需含「父件编码」「BOM层级」等列名）<br>');
+  if(stat['下级无自制件'].length)
+    L.push('· <b>下级无自制件</b>（'+stat['下级无自制件'].length+'）：下级全部是委外/外购。看板只统计自制件，如需计入请把下级属性改为「自制」<br>');
+  if(stat['不在物料主数据'].length)
+    L.push('· <b>不在物料主数据</b>（'+stat['不在物料主数据'].length+'）：只有 BOM 关系没有物料档案，'+
+      '可点下面按钮一键补建<br>');
+  L.push('· 改完后点「重置」或切换页签刷新看板</div>');
+  if(stat['不在物料主数据'].length)
+    L.push('<div style="margin-top:10px"><button class="btn sm primary" id="btnAuditFixItem">一键补建 '+
+      stat['不在物料主数据'].length+' 个缺失物料档案</button></div>');
+  /* 有 BOM、有自制下级，但总表类型不是「完成品」→ 可一键补标 */
+  var canMark=[];
+  Object.keys(DB.bom||{}).forEach(function(c){
+    if(shown[c]||!DB.items[c])return;
+    if(stdTypeOf(c)==='完成品')return;
+    var made=(DB.bom[c]||[]).filter(function(k){
+      var x=DB.items[k.code];return x&&x.prop==='自制';});
+    if(made.length)canMark.push(c);});
+  if(canMark.length)
+    L.push('<div style="margin-top:10px"><button class="btn sm" id="btnAuditMarkDone" '+
+      'style="background:#0f9960;color:#fff">一键把 '+canMark.length+
+      ' 个「有BOM的父件」在总表中补标为完成品</button>'+
+      '<div class="hint mt8" style="font-size:11.5px">仅对<b>已有 BOM 且含自制下级</b>、但总表类型不是完成品的料号生效；'+
+      '会在组装标准工时总表里<b>新增/改写类型列</b>。建议先备份。</div></div>');
+  L.push('</div>');
+  toastBox('看板诊断',L.join(''),true);
+  /* 补建物料 */
+  var fb=$('btnAuditFixItem');
+  if(fb)fb.onclick=function(){
+    var n=0;
+    stat['不在物料主数据'].forEach(function(c){
+      if(!c)return;
+      if(DB.items[c])return;
+      var rc=stdRec(c);
+      DB.items[c]={code:c,name:(rc&&rc[1])||'',spec:'',prop:'自制',unit:'Pcs',stage:(rc&&rc[5])||'半成品'};
+      n++;});
+    save();rebuildIndex();refreshStat();BRD.dirty=true;renderCurrentPage();
+    audit('补建物料',n+' 个');
+    toast('已补建 '+n+' 个物料档案，看板已刷新');
+    var m=$('_infoBox');if(m)m.style.display='none';
+  };
+  var mb=$('btnAuditMarkDone');
+  if(mb)mb.onclick=function(){
+    if(!confirm('将把 '+canMark.length+' 个料号在「组装标准工时总表」中补标为「完成品」。\n\n'+
+      '· 已存在总表记录：只改类型列，不动工时\n'+
+      '· 总表中没有的：新增一行（标准工时留空，需后续补录）\n\n'+
+      '⚠ 会修改总表数据，建议先「💾 备份JSON」。\n\n确定执行？'))return;
+    var nUpd=0,nAdd=0;
+    canMark.forEach(function(c){
+      var rc=stdRec(c);
+      /* 总表列：0编码 1名称 2生产车间 3标准工时 4入库工时 5类型 6备注 7流水线 8隶属主机 9产品系列 */
+      if(rc){ if(rc[5]!=='完成品'){rc[5]='完成品';nUpd++;} }
+      else{
+        var it=DB.items[c]||{};
+        STD.push([c,it.name||'','',null,null,'完成品','','','','','']);
+        nAdd++;}
+    });
+    if(nAdd)rebuildStdIndex();
+    save();
+    try{syncStdMatchSel();}catch(e){}
+    BRD.dirty=true;renderCurrentPage();
+    audit('补标完成品','更新'+nUpd+' 新增'+nAdd);
+    toast('已补标：更新 '+nUpd+' 条 / 新增 '+nAdd+' 条，看板已刷新');
+    var m2=$('_infoBox');if(m2)m2.style.display='none';
+  };
+});
+/* 诊断：某个料号为什么没出现在看板默认列表 */
 on('btnBrdWhy',function(){
   var code=(prompt('输入要检查的料号：','')||'').trim();
   if(!code)return;
@@ -5445,15 +5654,31 @@ function siteOpts(){
   return a;
 }
 /* 自动默认：BOM 明细料号 + 总表有此料号 → 湛江 */
-function siteAuto(code){
-  if(STD_IDX[code]===undefined)return null;   /* 总表没有 → 不自动设 */
-  var inBom=false;
+/* 料号是否出现在 BOM 关系中（作为父件或子件） */
+function inBomRel(code){
+  if(!code)return false;
   for(var p in DB.bom){
-    if(p===code)return '湛江';
+    if(p===code)return true;
     var arr=DB.bom[p]||[];
-    for(var i=0;i<arr.length;i++)if(arr[i].code===code)return '湛江';
+    for(var i=0;i<arr.length;i++)if(arr[i].code===code)return true;
   }
-  return null;
+  return false;
+}
+function siteAuto(code){
+  /* 宽松模式：只要是 BOM 关系中出现的料号即为湛江（不要求总表有此料号） */
+  if(DB.settings&&DB.settings.siteLoose){
+    return inBomRel(code)?'湛江':null;
+  }
+  if(STD_IDX[code]===undefined)return null;   /* 总表没有 → 不自动设 */
+  return inBomRel(code)?'湛江':null;
+}
+/* 生产地判定原因（用于诊断） */
+function siteReason(code){
+  var manual=(DB.sites&&DB.sites[code])||'';
+  if(manual)return '手工设置：'+manual;
+  if(!inBomRel(code))return '未出现在任何 BOM 关系中';
+  if(STD_IDX[code]===undefined)return '在 BOM 中，但<b>组装标准工时总表无此料号</b>（严格规则下无法判为湛江）';
+  return '在 BOM 中且总表有此料号 → 应为湛江';
 }
 function stdSite(code){
   if(!DB.sites)DB.sites={};
