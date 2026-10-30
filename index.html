@@ -519,6 +519,7 @@ body.role-super .super-only.blk{display:block !important}
           <label class="field">关键字<input type="text" id="brd-kw" class="w-md" placeholder="料号 / 名称" autocomplete="off"></label>
           <button class="btn" id="btnBrdFilter">筛选</button>
           <button class="btn" id="btnBrdReset">重置</button>
+          <button class="btn" id="btnBrdWhy" title="检查某个料号为什么没出现在看板">🔍 为什么没显示</button>
           <span class="spacer" style="flex:1"></span>
           <button class="btn" id="btnBrdExp2">展开到二级</button>
           <button class="btn" id="btnBrdExpAll">全部展开</button>
@@ -763,6 +764,14 @@ body.role-super .super-only.blk{display:block !important}
           <div class="hint mb8">清空后不可恢复，请先「备份数据」。可选择保留组装标准工时总表，仅清空物料与 BOM。</div>
           <button class="btn sm danger" data-dm2="clear2">清空全部数据（含标准工时总表）</button>
           <button class="btn sm danger" data-dm2="clear1">清空物料与 BOM（保留标准工时总表）</button>
+          <button class="btn sm" data-dm2="slim">🧹 清理冗余空壳物料（瘦身本地数据）</button>
+          <div class="frow mt8" style="margin-top:10px"><label>数据源</label><div class="ctl">
+            <select id="setSrcMode" class="w-md">
+              <option value="local">本地为主（含出厂内置数据，断网可用）</option>
+              <option value="cloud">云端为主（启动时从云端取全量，本地不存出厂数据）</option>
+            </select>
+            <div class="hint mt8" style="font-size:11.5px">选「云端为主」后，每次打开网页会自动从云端拉取全部数据并覆盖本地，<b>本机数据体积最小</b>；代价是<b>断网时打不开完整数据</b>，且必须先配置好云端且云端已有数据。</div>
+          </div></div>
         </div>
       </div>
 
@@ -1149,6 +1158,32 @@ function renderPick(){
   renderPager($('pickPager'),PICK.rows.length,PICK.page,size,function(p){PICK.page=p;renderPick()});
 }
 function closeMask(id){$(id).classList.remove('show')}
+/* 通用信息弹窗：标题 + HTML 内容（用于诊断结果等多行展示） */
+function toastBox(title,html,wide){
+  var id='_infoBox';
+  var m=$(id);
+  if(!m){
+    m=document.createElement('div');m.id=id;m.className='mask show';
+    m.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;'+
+      'display:flex;align-items:center;justify-content:center;padding:20px';
+    m.innerHTML='<div class="mh" style="background:#fff;border-radius:10px;max-width:'+
+      (wide?'680px':'460px')+';width:100%;max-height:82vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)">'+
+      '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center">'+
+      '<b style="font-size:15px;flex:1" class="tt"></b>'+
+      '<button class="btn sm" data-close>关闭</button></div>'+
+      '<div style="padding:14px 16px" class="bb"></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click',function(e){
+      if(e.target===m){m.style.display='none';return;}
+      var t=e.target;
+      if(t&&t.tagName==='BUTTON'&&t.getAttribute&&t.getAttribute('data-close')!==null){
+        m.style.display='none';}
+    });
+  }
+  m.querySelector('.tt').textContent=title||'提示';
+  m.querySelector('.bb').innerHTML=html||'';
+  m.style.display='flex';
+}
 document.addEventListener('click',function(e){
   if(e.target&&e.target.hasAttribute&&e.target.hasAttribute('data-close')){
     var m=e.target.closest('.mask');if(m)m.classList.remove('show');}
@@ -1763,10 +1798,22 @@ function doCostAll(){
     b.onclick=function(){$('cost-code').value=b.getAttribute('data-c');doCost();window.scrollTo(0,0)}});
   toast('已计算 '+codes.length+' 个料号');
 }
+function isDoneCode(c){
+  /* 判定是否为「完成品」：总表标注优先，其次物料主数据阶段 */
+  var ty=stdTypeOf(c);
+  if(ty)return ty==='完成品';
+  var it=DB.items[c];
+  return !!(it&&it.stage==='完成品');
+}
 function costCodes(){
-  var t=(DB.meta&&DB.meta.tops||[]).filter(function(c){return DB.items[c]});
-  if(t.length)return t;
-  return visibleCodes().filter(function(c){return DB.items[c].stage==='完成品'});
+  /* 候选完成品 = 出厂预置清单 ∪ 总表标注「完成品」∪ 物料阶段「完成品」
+     旧逻辑只取 DB.meta.tops，导致「导入 BOM 后新父件永不入池」——已修正 */
+  var seen={},out=[];
+  var push=function(c){if(!c||seen[c]||!DB.items[c])return;seen[c]=1;out.push(c);};
+  ((DB.meta&&DB.meta.tops)||[]).forEach(push);
+  visibleCodes().forEach(function(c){if(isDoneCode(c))push(c);});
+  if(!out.length)return visibleCodes().filter(function(c){return DB.items[c]&&DB.items[c].stage==='完成品'});
+  return out;
 }
 on('btnCostCalc',doCost);
 on('btnCostAll',doCostAll);
@@ -2233,57 +2280,75 @@ function doImport(fileEl,modeEl,restrict,logEl){
     toast('读取失败：'+msg);};
   readFile(f,function(content,isCSV){
     if(isCSV){applyImport(analyze(parseCSV(content)),mode,restrict);return;}
-    ensureXLSX(function(ok){
-      if(!ok){
-        if(logEl)logEl.innerHTML='<div style="color:#dc2626"><b>✗ Excel解析组件加载失败</b>（可能离线）</div>'+
-          '<div style="margin-top:8px;font-size:12.5px;color:#475569">'+
-          '请先把文件<b>另存为 CSV</b>：Excel 打开 →「文件」→「另存为」→ 类型选 <b>CSV UTF-8(逗号分隔)</b> → 再来导入</div>';
-        return toast('无法解析Excel，请转CSV');}
-      /* 先让「正在解析」提示渲染出来，再做重活（大文件可达 1-2 分钟，否则用户以为卡死） */
-      if(logEl)logEl.innerHTML='⏳ 正在解析 Excel（'+sizeTxt(f.size)+
-        '）<br><span class="hint">大文件约需几十秒到 2 分钟，请耐心等待，<b>不要重复点击</b></span>';
-      var doParse=function(){
-      var wb=null,err=null;
-      /* ① 优先 dense 模式：SheetJS 0.20+ 内存占用更低，大文件成功率高 */
-      try{ wb=XLSX.read(content,{type:'array',dense:true}); }
-      catch(e1){ err=e1;
-        /* ② 回退普通模式 */
-        try{ wb=XLSX.read(content,{type:'array'}); }catch(e2){ err=e2; } }
-      if(!wb){
-        var m=String(err&&err.message||'未知错误');
-        var isMem=/allocation|memory|out of|buffer|too large|maximum|range/i.test(m);
-        if(logEl){
-          logEl.innerHTML='<div style="color:#dc2626"><b>✗ 解析失败'+
-            (isMem?'（文件过大，浏览器内存不足）':'')+'</b></div>'+
-            '<div style="margin-top:6px;font-size:12px;color:#64748b">文件：'+esc(f.name)+
-            '　'+sizeTxt(f.size)+'<br>错误：'+esc(m.slice(0,140))+'</div>'+
-            '<div style="margin-top:8px;font-size:12.5px;color:#475569;line-height:1.9">'+
-            '<b>建议按顺序尝试：</b><br>'+
-            '① <b>转成 CSV（最有效）</b>：Excel 打开 →「文件」→「另存为」→ 类型选 <b>CSV UTF-8(逗号分隔)</b> → 再来导入<br>'+
-            '② <b>拆分文件</b>：按机种 / 产品线拆成几个 10 MB 以内的文件，分别导入<br>'+
-            '③ <b>精简表格</b>：删掉不需要的列（如 BOM版本、数据状态）和空行，只留「BOM层级 / 子项物料编码 / 物料名称 / 规格型号 / 物料属性 / 单位 / 用量」<br>'+
-            '④ <b>释放内存</b>：关闭其他浏览器标签页，刷新页面后重试</div>';
-        }
-        return toast(isMem?'文件过大，建议转CSV后导入':'解析失败，请看下方提示');
-      }
-      /* 逐 sheet 解析：单个 sheet 失败不影响其他 sheet */
-      var all={items:[],bomFlat:[],bomTree:[],times:[],procs:[],std:[]};
-      var bad=[];
-      wb.SheetNames.forEach(function(sn){
+    /* 直接用内置解析器（不依赖外网 CDN），失败再回退 SheetJS */
+    doParseExcel(content,f,mode,restrict,logEl);
+  },onFail);
+}
+/* Excel 解析：① 内置解析器（零依赖，优先） → ② SheetJS（仅作回退，用于导出） */
+function doParseExcel(content,f,mode,restrict,logEl){
+  var fail=function(title,detail,showCsv){
+    if(logEl){
+      logEl.innerHTML='<div style="color:#dc2626"><b>✗ '+esc(title)+'</b></div>'+
+        '<div style="margin-top:6px;font-size:12px;color:#64748b">文件：'+esc(f.name)+
+        '　'+sizeTxt(f.size)+'<br>'+esc(String(detail||'').slice(0,160))+'</div>'+
+        (showCsv?'<div style="margin-top:8px;font-size:12.5px;color:#475569">'+
+          '<b>最快解决</b>：Excel 打开 →「文件」→「另存为」→ 类型选 <b>CSV UTF-8(逗号分隔)</b> → 再来导入</div>':'');
+    }
+    toast('解析失败：'+title);
+  };
+  var run=function(){
+    if(typeof window.parseXlsxBuiltin!=='function'){
+      /* 内置解析器不可用时回退 SheetJS */
+      return ensureXLSX(function(ok){
+        if(!ok)return fail('无法解析 Excel 文件','解析组件不可用',true);
         try{
-          var aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false});
-          var d=analyze(aoa)||{};
-          ['items','bomFlat','bomTree','times','procs'].forEach(function(k){
-            all[k]=all[k].concat(d[k]||[]);});
-        }catch(e){bad.push(sn+'（'+String(e.message||'').slice(0,40)+'）');}
+          var wb=XLSX.read(content,{type:'array'});
+          var all={items:[],bomFlat:[],bomTree:[],times:[],procs:[],std:[]},bad=[];
+          wb.SheetNames.forEach(function(sn){
+            try{
+              var aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false});
+              var d=analyze(aoa)||{};
+              ['items','bomFlat','bomTree','times','procs'].forEach(function(k){all[k]=all[k].concat(d[k]||[]);});
+            }catch(e){bad.push(sn);}
+          });
+          window._impBadSheets=bad;
+          applyImport(all,mode,restrict);
+        }catch(e){fail('解析失败',e&&e.message,true);}
+      });
+    }
+    window.parseXlsxBuiltin(content).then(function(res){
+      var all={items:[],bomFlat:[],bomTree:[],times:[],procs:[],std:[]},bad=[];
+      res.order.forEach(function(sn){
+        try{
+          var d=analyze(res.sheets[sn])||{};
+          ['items','bomFlat','bomTree','times','procs'].forEach(function(k){all[k]=all[k].concat(d[k]||[]);});
+        }catch(e){bad.push(sn+'（'+String(e.message||'').slice(0,30)+'）');}
       });
       window._impBadSheets=bad;
       applyImport(all,mode,restrict);
-      };
-      if(window.requestAnimationFrame)requestAnimationFrame(function(){setTimeout(doParse,30);});
-      else setTimeout(doParse,30);
+    }).catch(function(e){
+      /* 内置失败 → 再试 SheetJS */
+      ensureXLSX(function(ok){
+        if(!ok)return fail('解析失败',(e&&e.message)||'未知',true);
+        try{
+          var wb=XLSX.read(content,{type:'array'});
+          var all={items:[],bomFlat:[],bomTree:[],times:[],procs:[],std:[]},bad=[];
+          wb.SheetNames.forEach(function(sn){
+            try{
+              var aoa=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,blankrows:false});
+              var d=analyze(aoa)||{};
+              ['items','bomFlat','bomTree','times','procs'].forEach(function(k){all[k]=all[k].concat(d[k]||[]);});
+            }catch(e2){bad.push(sn);}
+          });
+          window._impBadSheets=bad;
+          applyImport(all,mode,restrict);
+        }catch(e2){fail('解析失败',(e2&&e2.message)||(e&&e.message)||'未知',true);}
+      });
     });
-  },onFail);
+  };
+  if(logEl)logEl.innerHTML='⏳ 正在解析 <b>'+esc(f.name)+'</b>（'+sizeTxt(f.size)+'）…';
+  if(window.requestAnimationFrame)requestAnimationFrame(function(){setTimeout(run,30);});
+  else setTimeout(run,30);
 }
 /* 总表清单：导入物料/BOM（用隐藏文件输入） */
 var fileItem=document.createElement('input');fileItem.type='file';fileItem.id='fileImportItem';
@@ -2334,6 +2399,175 @@ on('btnClearTimes',function(){
   DB.times={};save();renderCurrentPage();if(CUR_TIME){renderTime();}toast('已清空工时');});
 on('btnClearAll',dmClear);
 on('btnLoadSeed',dmSeed);
+
+/* ===== 46_xlsx.js ===== */
+(function () {
+  if (typeof window === 'undefined') return;
+
+  var ZIP_EOCD = 0x06054b50, ZIP_CEN = 0x02014b50, ZIP_LOC = 0x04034b50;
+
+  function u32(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
+  function u16(b, o) { return b[o] | (b[o + 1] << 8); }
+
+  /* 从末尾定位 End Of Central Directory */
+  function findEOCD(b) {
+    var max = Math.max(0, b.length - 22), min = Math.max(0, b.length - 66000);
+    for (var i = b.length - 22; i >= min; i--) {
+      if (u32(b, i) === ZIP_EOCD) return i;
+    }
+    return -1;
+  }
+
+  function readEntries(b) {
+    var eo = findEOCD(b);
+    if (eo < 0) throw new Error('不是有效的 xlsx/zip 文件（找不到目录结构）');
+    var n = u16(b, eo + 10), cdOff = u32(b, eo + 16);
+    var out = {}, p = cdOff;
+    for (var i = 0; i < n; i++) {
+      if (u32(b, p) !== ZIP_CEN) break;
+      var method = u16(b, p + 10);
+      var csize = u32(b, p + 20);
+      var usize = u32(b, p + 24);
+      var fnLen = u16(b, p + 28), exLen = u16(b, p + 30), cmLen = u16(b, p + 32);
+      var locOff = u32(b, p + 42);
+      var name = new TextDecoder('utf-8').decode(b.subarray(p + 46, p + 46 + fnLen));
+      /* ZIP64：大小/偏移溢出时从 extra field 取 */
+      if (csize === 0xFFFFFFFF || usize === 0xFFFFFFFF || locOff === 0xFFFFFFFF) {
+        var q = p + 46 + fnLen, end = q + exLen;
+        while (q + 4 <= end) {
+          var hid = u16(b, q), hsz = u16(b, q + 2), body = q + 4;
+          if (hid === 0x0001) {
+            var k = body;
+            if (usize === 0xFFFFFFFF) { usize = u32(b, k) + u32(b, k + 4) * 4294967296; k += 8; }
+            if (csize === 0xFFFFFFFF) { csize = u32(b, k) + u32(b, k + 4) * 4294967296; k += 8; }
+            if (locOff === 0xFFFFFFFF) { locOff = u32(b, k) + u32(b, k + 4) * 4294967296; }
+            break;
+          }
+          q += 4 + hsz;
+        }
+      }
+      out[name] = { method: method, csize: csize, usize: usize, off: locOff };
+      p += 46 + fnLen + exLen + cmLen;
+    }
+    return out;
+  }
+
+  async function inflateRaw(bytes) {
+    if (typeof DecompressionStream === 'undefined') throw new Error('浏览器不支持内置解压');
+    var ds = new DecompressionStream('deflate-raw');
+    var stream = new Blob([bytes]).stream().pipeThrough(ds);
+    var ab = await new Response(stream).arrayBuffer();
+    return new Uint8Array(ab);
+  }
+
+  async function readEntry(b, e) {
+    /* 以 central directory 记录的偏移为准，按 local header 重新定位数据起点 */
+    var o = e.off;
+    if (u32(b, o) !== ZIP_LOC) throw new Error('文件结构损坏（local header 不匹配）');
+    var fnLen = u16(b, o + 26), exLen = u16(b, o + 28);
+    var start = o + 30 + fnLen + exLen;
+    var raw = b.subarray(start, start + e.csize);
+    if (e.method === 0) return raw;
+    if (e.method === 8) return await inflateRaw(raw);
+    throw new Error('不支持的压缩方式（method=' + e.method + '），请把文件另存为 xlsx 或 CSV');
+  }
+
+  function colToIdx(ref) {
+    var m = String(ref || '').match(/^([A-Z]+)/);
+    if (!m) return 0;
+    var s = m[1], n = 0;
+    for (var i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+    return n - 1;
+  }
+
+  function txtOf(node) {
+    var out = '';
+    if (!node) return out;
+    var ts = node.getElementsByTagName('t');
+    for (var i = 0; i < ts.length; i++) out += ts[i].textContent;
+    return out;
+  }
+
+  function parseSharedStrings(xmlStr) {
+    var doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) return [];
+    var sis = doc.getElementsByTagName('si'), out = [];
+    for (var i = 0; i < sis.length; i++) out.push(txtOf(sis[i]));
+    return out;
+  }
+
+  function parseSheet(xmlStr, shared) {
+    var doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('工作表 XML 解析失败（文件可能损坏）');
+    var rows = doc.getElementsByTagName('row');
+    var out = [];
+    for (var r = 0; r < rows.length; r++) {
+      var cs = rows[r].getElementsByTagName('c');
+      var arr = [];
+      var maxIdx = -1;
+      for (var c = 0; c < cs.length; c++) {
+        var cell = cs[c];
+        var idx = colToIdx(cell.getAttribute('r'));
+        var t = cell.getAttribute('t') || 'n';
+        var v = null;
+        if (t === 's') {
+          var vs = cell.getElementsByTagName('v')[0];
+          var si = vs ? parseInt(vs.textContent, 10) : -1;
+          v = (si >= 0 && shared[si] !== undefined) ? shared[si] : '';
+        } else if (t === 'inlineStr') {
+          v = txtOf(cell.getElementsByTagName('is')[0]);
+        } else if (t === 'b') {
+          var vb = cell.getElementsByTagName('v')[0];
+          v = vb ? (vb.textContent === '1' ? 'TRUE' : 'FALSE') : '';
+        } else if (t === 'e') {
+          var ve = cell.getElementsByTagName('v')[0];
+          v = ve ? ve.textContent : '';
+        } else {
+          var vn = cell.getElementsByTagName('v')[0];
+          v = vn ? vn.textContent : '';
+        }
+        if (v !== null && v !== '') { arr[idx] = v; if (idx > maxIdx) maxIdx = idx; }
+      }
+      for (var k = 0; k <= maxIdx; k++) if (arr[k] === undefined) arr[k] = '';
+      out.push(arr);
+    }
+    return out;
+  }
+
+  /* 主入口：ArrayBuffer -> { sheets: { 表名: AOA } } */
+  window.parseXlsxBuiltin = async function (buf) {
+    var b = new Uint8Array(buf);
+    var entries = readEntries(b);
+    var names = Object.keys(entries);
+
+    /* 表名映射：workbook.xml 里 r:id -> name，简化为按 sheet 文件顺序 */
+    var shared = [];
+    var ssKey = names.filter(function (n) { return /xl\/sharedStrings\.xml$/i.test(n); })[0];
+    if (ssKey) {
+      var ssBytes = await readEntry(b, entries[ssKey]);
+      shared = parseSharedStrings(new TextDecoder('utf-8').decode(ssBytes));
+    }
+
+    var sheetKeys = names.filter(function (n) {
+      return /xl\/worksheets\/sheet[^\/]*\.xml$/i.test(n);
+    }).sort(function (a, x) {
+      var na = parseInt((a.match(/(\d+)\.xml$/) || [0, 0])[1], 10);
+      var nb = parseInt((x.match(/(\d+)\.xml$/) || [0, 0])[1], 10);
+      return na - nb;
+    });
+    if (!sheetKeys.length) throw new Error('未找到工作表（文件可能不是 Excel 导出）');
+
+    var sheets = {}, order = [];
+    for (var i = 0; i < sheetKeys.length; i++) {
+      var bytes = await readEntry(b, entries[sheetKeys[i]]);
+      var aoa = parseSheet(new TextDecoder('utf-8').decode(bytes), shared);
+      var sn = 'Sheet' + (i + 1);
+      sheets[sn] = aoa;
+      order.push(sn);
+    }
+    return { sheets: sheets, order: order };
+  };
+})();
 
 /* ===== 50_backup.js ===== */
 /* ============ 备份恢复 / 密码 / 设置 ============ */
@@ -4170,7 +4404,55 @@ function bindBoard(){
     BRD.scope=$('brd-scope').value||'all';
     BRD.dirty=true;brdRefresh();
     toast(BRD.scope==='zj'?'已切换：仅统计湛江生产地':'已切换：统计全部生产地');});
-  on('btnBrdReset',function(){
+  /* 诊断：某个料号为什么没出现在看板默认列表 */
+on('btnBrdWhy',function(){
+  var code=(prompt('输入要检查的料号：','')||'').trim();
+  if(!code)return;
+  var it=DB.items[code];
+  var lines=[];
+  var ok=function(b){return b?'<span style="color:#0f9960;font-weight:600">✓</span>'
+                              :'<span style="color:#dc2626;font-weight:600">✗</span>';};
+  lines.push('<div style="font-size:13px;line-height:2">');
+  lines.push('<b style="font-size:14px">'+esc(code)+'</b> '+(it?esc(it.name||''):'<span style="color:#dc2626">（物料主数据中不存在）</span>')+'<br>');
+  var c1=!!it;
+  lines.push(ok(c1)+' ① 物料主数据中存在<br>');
+  var rc=stdRec(code),ty=stdTypeOf(code);
+  var c2=(ty==='完成品');
+  lines.push(ok(c2)+' ② 总表标注类型：<b>'+(ty?esc(ty):'总表无此料号')+'</b>（需为「完成品」）<br>');
+  if(it)lines.push('　 物料主数据阶段：'+esc(it.stage||'-')+'<br>');
+  var kids=(DB.bom[code]||[]);
+  var made=kids.filter(function(k){var x=DB.items[k.code];return x&&x.prop==='自制';});
+  var c3=made.length>0;
+  lines.push(ok(c3)+' ③ BOM 下级：'+kids.length+' 个（其中自制 '+made.length+' 个）<br>');
+  var selfStd=(rc&&rc[3])||0;
+  lines.push((selfStd?'✓':'—')+' ④ 本体标准工时：'+(selfStd?esc(String(selfStd))+' 秒':'<span style="color:#d97706">未填写</span>')+'<br>');
+  var withTime=0,noTime=[];
+  made.forEach(function(k){
+    var u=stageUnit(k.code);
+    if(u>0)withTime++;else noTime.push(k.code);});
+  var c4=(made.length===0)||(withTime>0);
+  lines.push(ok(c4)+' ⑤ 下级自制件中有工时的：'+withTime+' / '+made.length+'<br>');
+  if(noTime.length)lines.push('　 <span style="color:#d97706">无工时：'+noTime.slice(0,8).map(esc).join('、')+
+    (noTime.length>8?' 等 '+noTime.length+' 个':'')+'</span><br>');
+  var show=c1&&c2&&c3;
+  lines.push('<div style="margin-top:10px;padding:8px;border-radius:6px;background:'+
+    (show?'#ecfdf5':'#fef2f2')+';font-weight:600">'+
+    (show?'✓ 该料号<b>会</b>出现在看板默认列表':'✗ 不显示，原因：'+
+      (!c1?'物料主数据中无此料号':'')+
+      (c1&&!c2?'总表类型不是「完成品」（当前：'+(ty||'总表无此料号')+'）':'')+
+      (c1&&c2&&!c3?'没有下级自制件（BOM 未导入或下级均为委外/外购）':''))+'</div>');
+  if(show&&withTime===0&&made.length)
+    lines.push('<div style="margin-top:6px;color:#d97706;font-size:12.5px">注：会显示，但下级均无工时，完整组装工时 = 本体 '+
+      esc(String(selfStd))+' 秒</div>');
+  lines.push('<div style="margin-top:10px;font-size:12.5px;color:#475569;line-height:1.9"><b>处理建议：</b><br>');
+  if(!c2)lines.push('· 到「组装标准工时总表」找到该料号，把<b>类型改为「完成品」</b>并填写标准工时<br>');
+  if(!c3)lines.push('· 导入该料号的 BOM，且下级需标记为「自制」<br>');
+  if(c3&&withTime<made.length)lines.push('· 到「组装标准工时总表」为 '+noTime.length+' 个无工时下级<b>补录标准工时</b><br>');
+  lines.push('· 改完后点「重置」或切换页签刷新看板</div>');
+  lines.push('</div>');
+  toastBox('料号诊断',lines.join(''),true);
+});
+on('btnBrdReset',function(){
     $('brd-host').value='';$('brd-series').value='';$('brd-kw').value='';
     /* 重置时清掉"用户手动输入"标记，让防填充重新生效 */
     ['brd-kw','brd-code'].forEach(function(id){var el=$(id);if(el)el._userTyped=false;});
@@ -5260,6 +5542,36 @@ document.querySelectorAll('[data-dm2]').forEach(function(b){
       if(!confirm('清空全部物料与 BOM（保留组装标准工时总表）？建议先备份。'))return;
       DB.items={};DB.bom={};DB.times={};DB.sites={};save();rebuildIndex();refreshStat();
       BRD.dirty=true;renderCurrentPage();audit('清空','物料与BOM');return toast('已清空物料与 BOM');}
+    if(a==='slim'){
+      /* 清理：既不在任何 BOM 中作为下级、自身也无下级 BOM、且无工时填报的"空壳"物料。
+         这些多是导入总表时自动补建的，删除可明显减小本地数据量。 */
+      var used={};
+      Object.keys(DB.bom||{}).forEach(function(p){
+        (DB.bom[p]||[]).forEach(function(k){used[k.code]=1;});
+        used[p]=1;});
+      var del=[];
+      Object.keys(DB.items||{}).forEach(function(c){
+        if(used[c])return;                       /* 出现在 BOM 关系中，保留 */
+        if((DB.bom[c]||[]).length)return;        /* 自己有下级，保留 */
+        var t=DB.times[c];
+        var hasTime=t&&(t.stdTotal||t.inboundTotal||(t.inbound!==null&&t.inbound!==undefined&&t.inbound!==''));
+        var hasProc=t&&(['semi','asm','done'].some(function(g){return t[g]&&Object.keys(t[g]).length;}));
+        if(hasTime||hasProc)return;              /* 有工时/工序数据，保留 */
+        var inStd=(typeof STD_IDX!=='undefined'&&STD_IDX[c]!==undefined&&STD_IDX[c]!==null);
+        if(inStd)return;                         /* 总表里有（有标准工时），保留 */
+        del.push(c);});
+      if(!del.length)return toast('没有可清理的冗余物料，数据很干净');
+      var kb=Math.round((JSON.stringify(DB.items).length+JSON.stringify(DB.bom).length)/1024);
+      if(!confirm('检测到 '+del.length+' 个冗余空壳物料（无 BOM 关系、无工时、总表也无此料号）。\n\n'+
+        '当前本地物料/BOM 约 '+kb+' KB，清理后可明显减小。\n\n'+
+        '这些料号多为导入总表时自动补建的占位记录，删除不影响工时计算。\n\n'+
+        '建议先「备份数据」。确认清理？'))return;
+      del.forEach(function(c){delete DB.items[c];delete DB.bom[c];delete DB.times[c];
+        if(DB.sites)delete DB.sites[c];});
+      save();rebuildIndex();refreshStat();BRD.dirty=true;renderCurrentPage();
+      audit('清理冗余','删除 '+del.length+' 个空壳物料');
+      return toast('已清理 '+del.length+' 个冗余物料（保留 '+
+        Object.keys(DB.items).length+' 个）');}
     if(a==='clear2'){
       if(!confirm('清空全部数据（含组装标准工时总表）？此操作不可恢复，建议先备份。'))return;
       if(!confirm('再次确认：真的要清空全部数据吗？'))return;
@@ -5267,6 +5579,31 @@ document.querySelectorAll('[data-dm2]').forEach(function(b){
       BRD.dirty=true;renderCurrentPage();audit('清空','全部数据');return toast('已清空全部数据');}
   };});
 /* 超管密码直接修改（用户管理页） */
+/* 数据源模式：local（默认，含出厂内置）／cloud（启动从云端拉取全量，本地不存出厂数据） */
+onch('setSrcMode',function(){
+  if(!isSuper()){var el=$('setSrcMode');if(el)el.value=(DB.settings.srcMode||'local');
+    return toast('仅超管可修改');}
+  var v=$('setSrcMode').value||'local';
+  var old=DB.settings.srcMode||'local';
+  if(v===old)return;
+  if(v==='cloud'){
+    if(!clReady()){var el2=$('setSrcMode');if(el2)el2.value='local';
+      return toast('请先配置云端同步（URL 与 key）并测试连接成功');}
+    if(!confirm('切换到【云端为主】：\n\n'+
+      '· 每次打开网页会自动从云端拉取全量数据覆盖本地\n'+
+      '· 本机不再保留出厂内置数据，数据体积最小\n'+
+      '· 断网时无法查看完整数据\n\n'+
+      '⚠ 请确认云端目前已有完整数据，否则切换后本地会被拉空。\n\n'+
+      '建议先「备份数据」，并先执行一次「⤒ 全量覆盖上传」。\n\n确定切换？')){
+      var el3=$('setSrcMode');if(el3)el3.value='local';return;}
+  }else{
+    if(!confirm('切回【本地为主】：本机将保留完整数据副本，断网也能正常查看。\n\n确定？')){
+      var el4=$('setSrcMode');if(el4)el4.value='cloud';return;}
+  }
+  DB.settings.srcMode=v;save();
+  audit('数据源模式',v==='cloud'?'云端为主':'本地为主');
+  toast(v==='cloud'?'已切换：云端为主（下次打开自动拉取）':'已切换：本地为主');
+});
 on('btnPwDirect2',function(){
   if(!isSuper())return toast('仅超管可操作');
   var v=(($('pw-direct2')&&$('pw-direct2').value)||'').trim();
@@ -5405,6 +5742,7 @@ function renderSetInfo(){
   if($('setStd'))$('setStd').textContent=STD.length;
   if($('setAutoLock'))$('setAutoLock').value=String((DB.settings&&DB.settings.autoLock)||30);
   if($('setEnc'))$('setEnc').checked=!!(DB.settings&&DB.settings.enc);
+  if($('setSrcMode'))$('setSrcMode').value=(DB.settings&&DB.settings.srcMode)||'local';
   if($('setEncSt')){
     var on=!!(DB.settings&&DB.settings.enc);
     var has=!!(DB.settings&&DB.settings.encPwd);
